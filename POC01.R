@@ -67,10 +67,12 @@ edx %>%
   geom_histogram(aes(x = rating), binwidth = 0.25)
 
 edx %>%
-  mutate(after_half_star = timestamp >= half_stars_begining) %>%
+  mutate(partition = ifelse(timestamp < half_stars_begining,
+                            paste('before', as_datetime(half_stars_begining)),
+                            paste('after', as_datetime(half_stars_begining)))) %>%
   ggplot() +
   geom_histogram(aes(x = rating), binwidth = 0.25) +
-  facet_grid(~ after_half_star)
+  facet_grid(~ partition)
 
 
 
