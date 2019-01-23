@@ -9,15 +9,28 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-load('datasets_generator.R')
 ```
 
 ## Overview
 
-XXXX
+```{r poc01}
+edx %>%
+  ggplot() +
+  geom_histogram(aes(x = rating), binwidth = 0.25)
+```
 
-```{r poc}
-head(edx, 20)
+```{r poc02}
+set.seed(0)
+edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
+  ggplot(aes(x = as_datetime(timestamp), y = rating)) +
+  geom_point() +
+  geom_vline(aes(xintercept = as_datetime(half_stars_begining)),
+             color = "red", linetype = "dashed") +
+  geom_text(aes(x = as_datetime(half_stars_begining),
+                label = as_datetime(half_stars_begining),
+                y = 2.5),
+            color = "red", vjust = -1, angle = 90) +
+  labs(x = 'Timestamp', y = 'Rating')
 ```
 
 ## Methods

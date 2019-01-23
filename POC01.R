@@ -3,14 +3,12 @@ library(lubridate)
 half_stars_begining <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
 
 set.seed(0)
-analysis_set <- edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),]
-
-analysis_set %>%
+edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
   ggplot(aes(x = as_datetime(timestamp), y = rating)) +
   geom_point() +
   geom_vline(aes(xintercept = as_datetime(half_stars_begining)), color = "red", linetype = "dashed") +
-  geom_text(aes(x = as_datetime(half_stars_begining), label = as_datetime(half_stars_begining), y = 2.5), colour = "red", vjust = -1, angle = 90) +
-  labs(x = 'Timestamp', y = 'Rating')
+  geom_text(aes(x = as_datetime(half_stars_begining), label = as_datetime(half_stars_begining), y = 2.5), color = "red", vjust = -1, angle = 90) +
+  labs(x = 'timestamp', y = 'rating')
 
 
 
@@ -62,6 +60,19 @@ RMSE(pred, validation$rating)
 edx %>%
   ggplot() +
   geom_histogram(aes(x = rating), binwidth = 0.25)
+
+edx %>%
+  filter(timestamp < half_stars_begining) %>%
+  ggplot() +
+  geom_histogram(aes(x = rating), binwidth = 0.25)
+
+edx %>%
+  mutate(after_half_star = timestamp >= half_stars_begining) %>%
+  ggplot() +
+  geom_histogram(aes(x = rating), binwidth = 0.25) +
+  facet_grid(~ after_half_star)
+
+
 
 edx %>%
   ggplot() +
