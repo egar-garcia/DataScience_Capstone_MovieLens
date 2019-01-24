@@ -1,5 +1,148 @@
 library(lubridate)
 
+edx %>%
+  ggplot() +
+  geom_histogram(aes(x = rating), binwidth = 0.25)
+
+set.seed(0)
+edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
+  ggplot(aes(x = as_datetime(timestamp), y = rating)) +
+  geom_point() +
+  labs(x = 'timestamp', y = 'rating')
+
+
+partition_timestamp <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
+
+set.seed(1)
+edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
+  ggplot(aes(x = as_datetime(timestamp), y = rating)) +
+  geom_point() +
+  geom_vline(aes(xintercept = as_datetime(partition_timestamp)),
+             color = "red", linetype = "dashed") +
+  geom_text(aes(x = as_datetime(partition_timestamp),
+                label = as_datetime(partition_timestamp),
+                y = 2.5),
+            color = "red", vjust = -1, angle = 90) +
+  labs(x = 'timestamp', y = 'rating')
+
+partition_names = c(paste('before', as_datetime(partition_timestamp)),
+                    paste('after', as_datetime(partition_timestamp)))
+
+edx %>%
+  mutate(partition = factor(ifelse(timestamp < partition_timestamp,
+                                   partition_names[1], partition_names[2]),
+                            levels = partition_names)) %>%
+  ggplot() +
+  geom_histogram(aes(x = rating), binwidth = 0.25) +
+  facet_grid(~ partition)
+
+#-------------------
+
+PseudoLinearBiasBasedModel <- function(s) {
+  model <- list()
+
+  model$mu <- mean(s$rating)
+
+  model$movie_info <- s %>%
+    group_by(movieId) %>%
+    summarise(movie_bias = mean(rating - model$mu))
+
+  model$user_info <- s %>%
+    left_join(model$movie_info, by = 'movieId') %>%
+    group_by(userId) %>%
+    summarise(user_bias = mean(rating - movie_bias - model$mu))
+
+  model$predict <- function(t) {
+    t %>%
+      left_join(model$movie_info, by = 'movieId') %>%
+      left_join(model$user_info, by = 'userId') %>%
+      mutate(pred = model$mu + movie_bias + user_bias) %>%
+      .$pred
+  }
+
+  model
+}
+
+
+
+
+
+#-------------------
+#-------------------
+#-------------------
+#-------------------
+
+edx %>%
+  ggplot() +
+  geom_histogram(aes(x = rating), binwidth = 0.25)
+
+set.seed(0)
+edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
+  ggplot(aes(x = as_datetime(timestamp), y = rating)) +
+  geom_point()
+
+
+
+library(lubridate)
+
+partition_timestamp <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
+
+set.seed(1)
+edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
+  ggplot(aes(x = as_datetime(timestamp), y = rating)) +
+  geom_point() +
+  geom_vline(aes(xintercept = as_datetime(partition_timestamp)),
+             color = "red", linetype = "dashed") +
+  geom_text(aes(x = as_datetime(partition_timestamp),
+                label = as_datetime(partition_timestamp),
+                y = 2.5),
+            color = "red", vjust = -1, angle = 90)
+
+
+partition_names = c(paste('before', as_datetime(partition_timestamp)),
+                    paste('after', as_datetime(partition_timestamp)))
+
+edx %>%
+  mutate(partition = factor(ifelse(timestamp < partition_timestamp,
+                                   partition_names[1], partition_names[2]),
+                            levels = partition_names)) %>%
+  ggplot() +
+  geom_histogram(aes(x = rating), binwidth = 0.25) +
+  facet_grid(~ partition)
+
+
+
+
+
+#----------------------
+
+
+library(lubridate)
+
+half_stars_begining <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
+data_partitions = c(paste('before', as_datetime(half_stars_begining)),
+                    paste('after', as_datetime(half_stars_begining)))
+
+set.seed(0)
+edx[createDataPartition(y = edx$rating, times = 1, p = 0.01, list = FALSE),] %>%
+  ggplot(aes(x = as_datetime(timestamp), y = rating)) +
+  geom_point() +
+  geom_vline(aes(xintercept = as_datetime(half_stars_begining)), color = "red", linetype = "dashed") +
+  geom_text(aes(x = as_datetime(half_stars_begining), y = 0, label = as_datetime(half_stars_begining)), size=4, angle=90, vjust=-0.4, hjust=0) +
+  labs(x = 'Timestamp', y = 'Rating')
+
+edx %>%
+  mutate(partition = factor(ifelse(timestamp < half_stars_begining,
+                                   data_partitions[1], data_partitions[2]),
+                            levels = data_partitions)) %>%
+  ggplot() +
+  geom_histogram(aes(x = rating), binwidth = 0.25) +
+  facet_grid(~ partition)
+
+
+
+library(lubridate)
+
 half_stars_begining <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
 
 set.seed(0)
@@ -9,6 +152,7 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>
   geom_vline(aes(xintercept = as_datetime(half_stars_begining)), color = "red", linetype = "dashed") +
   geom_text(aes(x = as_datetime(half_stars_begining), label = as_datetime(half_stars_begining), y = 2.5), color = "red", vjust = -1, angle = 90) +
   labs(x = 'timestamp', y = 'rating')
+
 
 
 
@@ -66,10 +210,12 @@ edx %>%
   ggplot() +
   geom_histogram(aes(x = rating), binwidth = 0.25)
 
+
+
 edx %>%
-  mutate(partition = ifelse(timestamp < half_stars_begining,
-                            paste('before', as_datetime(half_stars_begining)),
-                            paste('after', as_datetime(half_stars_begining)))) %>%
+  mutate(partition = factor(ifelse(timestamp < half_stars_begining,
+                                   data_partitions[1], data_partitions[2]),
+                            levels = data_partitions)) %>%
   ggplot() +
   geom_histogram(aes(x = rating), binwidth = 0.25) +
   facet_grid(~ partition)
@@ -80,10 +226,16 @@ edx %>%
   ggplot() +
   geom_point(aes(x = timestamp, y = rating))
 
+
+
+
+
+
 library(lubridate)
 
 half_stars_begining <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
-as_datetime(half_stars_begining)
+data_partitions = c(paste('before', as_datetime(half_stars_begining)),
+                    paste('after', as_datetime(half_stars_begining)))
 
 set.seed(0)
 edx[createDataPartition(y = edx$rating, times = 1, p = 0.01, list = FALSE),] %>%
@@ -93,6 +245,13 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.01, list = FALSE),] %>%
   geom_text(aes(x = as_datetime(half_stars_begining), y = 0, label = as_datetime(half_stars_begining)), size=4, angle=90, vjust=-0.4, hjust=0) +
   labs(x = 'Timestamp', y = 'Rating')
 
+edx %>%
+  mutate(partition = factor(ifelse(timestamp < half_stars_begining,
+                                   data_partitions[1], data_partitions[2]),
+                            levels = data_partitions)) %>%
+  ggplot() +
+  geom_histogram(aes(x = rating), binwidth = 0.25) +
+  facet_grid(~ partition)
 
 
 #--------------------------------
