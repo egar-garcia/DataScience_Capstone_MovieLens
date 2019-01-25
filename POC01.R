@@ -63,8 +63,47 @@ PseudoLinearBiasBasedModel <- function(s) {
   model
 }
 
+m <- PseudoLinearBiasBasedModel(edx)
+pred <- m$predict(edx)
+RMSE(pred, edx$rating)
+# 0.8567039
 
+#-------------------
 
+PartitionedtModel <- function(s, base_model_generator) {
+  partitioned_model <- list()
+
+  s1 <- s %>% filter(timestamp < partition_timestamp)
+  s2 <- s %>% filter(timestamp >= partition_timestamp)
+
+  partitioned_model$model1 <- base_model_generator(s1)
+  partitioned_model$model2 <- base_model_generator(s2)
+
+  partitioned_model$predict <- function(t) {
+    pred1 <- partitioned_model$model1$predict(t)
+    pred2 <- partitioned_model$model2$predict(t)
+
+    t %>%
+      mutate(pred1 = pred1, pred2 = pred2) %>%
+      mutate(pred = ifelse(timestamp < partition_timestamp,
+                           ifelse(!is.na(pred1), pred1, pred2),
+                           ifelse(!is.na(pred2), pred2, pred1))) %>%
+      .$pred
+  }
+
+  partitioned_model
+}
+
+round_ratings <- function(s, ratings) {
+  ifelse(s$timestamp < partition_timestamp, round(ratings), round(ratings * 2)/2)
+}
+
+pm <- PartitionedtModel(edx, PseudoLinearBiasBasedModel)
+pred <- pm$predict(edx)
+RMSE(pred, edx$rating)
+# 0.8524909
+mean(edx$rating == round_ratings(edx, pred))
+# 0.361467
 
 
 #-------------------
