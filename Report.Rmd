@@ -34,34 +34,34 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>
 
 
 ```{r}
-partition_timestamp <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
+half_stars_startpoint <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
 ```
 
-`r as_datetime(partition_timestamp)`
+`r as_datetime(half_stars_startpoint)`
 
 ```{r, echo=FALSE}
-set.seed(1)
+set.seed(0)
 ```
 
 ```{r}
 edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
   ggplot(aes(x = as_datetime(timestamp), y = rating)) +
   geom_point() +
-  geom_vline(aes(xintercept = as_datetime(partition_timestamp)),
+  geom_vline(aes(xintercept = as_datetime(half_stars_startpoint)),
              color = "red", linetype = "dashed") +
-  geom_text(aes(x = as_datetime(partition_timestamp),
-                label = as_datetime(partition_timestamp),
+  geom_text(aes(x = as_datetime(half_stars_startpoint),
+                label = as_datetime(half_stars_startpoint),
                 y = 2.5),
             color = "red", vjust = -1, angle = 90) +
   labs(x = 'timestamp', y = 'rating')
 ```
 
 ```{r}
-partition_names = c(paste('before', as_datetime(partition_timestamp)),
-                    paste('after', as_datetime(partition_timestamp)))
+partition_names = c(paste('before', as_datetime(half_stars_startpoint)),
+                    paste('on or after', as_datetime(half_stars_startpoint)))
 
 edx %>%
-  mutate(partition = factor(ifelse(timestamp < partition_timestamp,
+  mutate(partition = factor(ifelse(timestamp < half_stars_startpoint,
                                    partition_names[1], partition_names[2]),
                             levels = partition_names)) %>%
   ggplot() +
@@ -70,11 +70,18 @@ edx %>%
 ```
 
 
+
+
 ## Methods
+
+### Simple Average
+
+```
+```
 
 ### Pseudo Linear Model
 
-See <https://rafalab.github.io/dsbook/recommendation-systems.html>
+See: <https://rafalab.github.io/dsbook/recommendation-systems.html>
 
 
 ## R Markdown

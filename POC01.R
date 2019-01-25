@@ -1,3 +1,17 @@
+ConstantModel <- function(s) {
+  model <- list()
+  
+  model$pred <- 4
+  
+  model$predict <- function() {
+    model$pred
+  }
+}
+
+
+
+#----------------------
+
 library(lubridate)
 
 edx %>%
@@ -36,6 +50,59 @@ edx %>%
   geom_histogram(aes(x = rating), binwidth = 0.25) +
   facet_grid(~ partition)
 
+
+#-------------------
+
+PartitionedtModel <- function(s, base_model_generator) {
+  partitioned_model <- list()
+
+  # Spliting the dataset in 2,
+  # one set for data before the timestamp to do the partition,
+  s1 <- s %>% filter(timestamp < partition_timestamp)
+  # and the other one for the data on or after the timestampt to do the partition
+  s2 <- s %>% filter(timestamp >= partition_timestamp)
+
+  # Generation a model for each dataset
+  partitioned_model$model1 <- base_model_generator(s1)
+  partitioned_model$model2 <- base_model_generator(s2)
+
+  partitioned_model$predict <- function(t) {
+    # 
+    pred1 <- partitioned_model$model1$predict(t)
+    pred2 <- partitioned_model$model2$predict(t)
+
+    t %>%
+      mutate(pred1 = pred1, pred2 = pred2) %>%
+      mutate(pred = ifelse(timestamp < partition_timestamp,
+                           ifelse(!is.na(pred1), pred1, pred2),
+                           ifelse(!is.na(pred2), pred2, pred1))) %>%
+      .$pred
+  }
+
+  partitioned_model
+}
+
+round_ratings <- function(s, ratings) {
+  ifelse(s$timestamp < partition_timestamp, round(ratings), round(ratings * 2)/2)
+}
+
+
+#-------------------
+SimpleAvgModel <- function(s) {
+  model <- list()
+
+  model$mu <- mean(s$rating)
+
+  model$predict <- function(t) {
+    model$mu
+  }
+
+  model
+}
+
+m <- SimpleAvgModel(edx)
+RMSE(m$predict(edx), edx$rating)
+
 #-------------------
 
 PseudoLinearBiasBasedModel <- function(s) {
@@ -56,7 +123,9 @@ PseudoLinearBiasBasedModel <- function(s) {
     t %>%
       left_join(model$movie_info, by = 'movieId') %>%
       left_join(model$user_info, by = 'userId') %>%
-      mutate(pred = model$mu + movie_bias + user_bias) %>%
+      mutate(pred = model$mu +
+                    ifelse(!is.na(movie_bias), movie_bias, 0) +
+                    ifelse(!is.na(user_bias), user_bias, 0)) %>%
       .$pred
   }
 
@@ -97,6 +166,10 @@ PartitionedtModel <- function(s, base_model_generator) {
 round_ratings <- function(s, ratings) {
   ifelse(s$timestamp < partition_timestamp, round(ratings), round(ratings * 2)/2)
 }
+
+m <- PartitionedtModel(edx, SimpleAvgModel)
+pred <- m$predict(edx)
+RMSE(m$predict(edx), edx$rating)
 
 pm <- PartitionedtModel(edx, PseudoLinearBiasBasedModel)
 pred <- pm$predict(edx)
