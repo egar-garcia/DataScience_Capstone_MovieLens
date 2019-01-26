@@ -41,8 +41,8 @@ edx %>%
 
 #' This object-constructor function is used to generate a metamodel 
 #' that contains two models,
-#' one model fitted for data before the startpoint when half stars were allowed
-#' for the ratings, and the other one fitted for data on or after that.
+#' one fitted for data before the startpoint when half stars were allowed in the ratings,
+#' and the other one fitted for data on or after that startpoint.
 #' The predictions are performed by choosing the appropriate model according to the 
 #' data's timestamp.
 #' 
@@ -55,16 +55,18 @@ PartitionedtModel <- function(dataset, base_model_generator) {
   partitioned_model <- list()
 
   # Spliting the dataset in 2,
-  # one set for data before the timestamp to do the partition,
+  # one set for data before the startpoint when half stars were allowed
   dataset1 <- dataset %>% filter(timestamp < half_stars_startpoint)
-  # and the other one for the data on or after the timestampt to do the partition
+  # and the other one for the data on or after the startpoint when half stars were allowed
   dataset2 <- dataset %>% filter(timestamp >= half_stars_startpoint)
 
-  # Generation a model for each dataset
+  # Generating a model for each dataset
   partitioned_model$model1 <- base_model_generator(dataset1)
   partitioned_model$model2 <- base_model_generator(dataset2)
 
-  #' Performs a prediction with the combined fitted models
+  #' Performs a prediction with the combined fitted models,
+  #' it tries to do the prediction with the respective model based on the timestamp,
+  #' but if the prediction can not be performed then the other model is attempted.
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction for each row of the dataset
   partitioned_model$predict <- function(s) {
@@ -86,25 +88,25 @@ PartitionedtModel <- function(dataset, base_model_generator) {
 }
 
 
-# Converts a prediction whic is a floating point number to a one used to 
-# represent ratings given by stars,
-# i.e. {1, 2, 3, 4, 5} if the timestamp is before the half start startpoint 
-# or {1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5} if the timestamp is on or after
+#' Converts a prediction (which is a floating point number) to a one used to 
+#' represent ratings given by stars,
+#' i.e. {1, 2, 3, 4, 5} if the timestamp is before the half start startpoint 
+#' or {1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5} if the timestamp is on or after.
 pred2stars <- function(timestamp, pred) {
-  # Rounds the prediction either to be full stars or having a half star
+  # Rounds the prediction either to be full-stars or having a half-star
   # according to the timestamp
   rounded_pred <- ifelse(timestamp < half_stars_startpoint,
                          round(pred),
                          round(pred * 2)/2)
 
-  # Making sure the rating is in the range of 1 to 5  
+  # Making sure the rating is not smaller that 1 or bigger than 5  
   min(max(rounded_pred, 1), 5)
 }
 
 
 #' This object-constructor function is used to generate a model
-#' that always return as prediction the average of the rating in the
-#' given dataset used to fit the model
+#' that always returns as prediction the average of the rating in the
+#' given dataset used to fit the model.
 #' @param dataset The dataset used to fit the model
 #' @return The model
 SimpleAvgModel <- function(dataset) {
@@ -124,25 +126,18 @@ SimpleAvgModel <- function(dataset) {
 }
 
 pred <- SimpleAvgModel(edx)$predict(edx)
-RMSE(edx$rating, pred)
+RMSE(pred, edx$rating)
 # 1.060331
-mean(edx$rating == pred2stars(edx$timestamp, pred))
-
-edx1 <- edx %>% filter(timestamp < half_stars_startpoint)
-RMSE(edx1$rating, SimpleAvgModel(edx1)$predict(edx1))
-# 1.086534
-
-edx2 <- edx %>% filter(timestamp >= half_stars_startpoint)
-RMSE(edx2$rating, SimpleAvgModel(edx2)$predict(edx2))
-# 1.02891
+mean(pred2stars(edx$timestamp, pred) == edx$rating)
+# 0.2876016
 
 
-RMSE(edx$rating, PartitionedtModel(edx, SimpleAvgModel)$predict(edx))
+pred <- PartitionedtModel(edx, SimpleAvgModel)$predict(edx)
+RMSE(pred, edx$rating)
 # 1.059362
+mean(pred2stars(edx$timestamp, pred) == edx$rating)
+# 0.2876016
 
-round_ratings <- function(s, ratings) {
-  ifelse(s$timestamp < partition_timestamp, round(ratings), round(ratings * 2)/2)
-}
 
 
 
