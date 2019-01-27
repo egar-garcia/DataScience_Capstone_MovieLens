@@ -15,11 +15,91 @@ library(lubridate)
 
 ## Overview
 
+## Methodology
+
+To evaluate the different (machine learning) methods tested in this report, an
+object-oriented approach is going to be used, each method is going to be represented 
+by a model which would be generated through the construction of an object.
+To generate a model, the constructor function receives a dataset (the training set) 
+which is used to fit the model an construct its object.
+The model's object includes a `predict` function used to perform a prediction
+for another dataset (which could be the set for testing, validation, production, etc.).
+
+
+For example, the following function creates and object to represent a model that always
+gives the most common rate (the mode) of the training set as prediction:
+
+```{r}
+#' This object-constructor function is used to generate a model that returns 
+#' a as prediction the most common rating in the dataset used to fit it.
+#' @param dataset The dataset used to fit the model
+#' @return The model
+ModeModel <- function(dataset) {
+  model <- list()
+
+  model$ratings <- unique(dataset$rating)
+  model$mode <- model$ratings[which.max(tabulate(match(dataset$rating, model$ratings)))]
+
+  #' The prediction function
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction for the given dataset
+  model$predict <- function(s) {
+    model$mode
+  }
+
+  model
+}
+```
+
+
+Using the constructor function, an object can be created to fit the particular model:
+
+```{r}
+model <- ModeModel(edx)
+```
+
+
+Then this model can be used to make predictions, like in the following code predicting
+agains the training and the validation sets:
+
+```{r}
+training_pred <- model$predict(edx)
+validation_pred <- model$predict(validation)
+```
+
+
+And the predictions are helpful to messure the performance of the model in terms of
+RMSE and/or accuracy, applied to the training and validation sets:
+
+```{r}
+sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
+        RMSE(training_pred, edx$rating),
+        mean(training_pred == edx$rating),
+        RMSE(validation_pred, validation$rating),
+        mean(validation_pred == validation$rating))
+```
+
+
+### Analysis of the data
+
+Let's take an initial look at how the ratings are distributed by plotting an
+histogram to account the amount of the different ratings given by the customers.
+
 ```{r}
 edx %>%
   ggplot() +
   geom_histogram(aes(x = rating), binwidth = 0.25)
 ```
+
+
+It can be observed that ratings can be interpreted as the number of starts from 1 to 5
+that users give to a movie, however it can be seen that ratings ending with a half 
+are used, at first impression looks like half start ratings are not very popular among users.
+
+
+Let's visualize the data from another point of view, this time plotting
+the ratings against the timestamp. For exploratory purposes lets just plot
+using a small subset of the dataset, since using the whole one might take a while.
 
 ```{r, echo=FALSE}
 set.seed(0)
@@ -33,11 +113,24 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>
 ```
 
 
+Now something interesting can be observed, it looks like ratings ending in half-stars
+were allowed after certain point in time, and before that just full-stars were allowed.
+
+To find the point in time were rating ending in half star started to appear, the following code can be used. In basically gets the minimum timestamp in the dataset
+where a rating with half star is found.
+
 ```{r}
 half_stars_startpoint <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
 ```
 
-`r as_datetime(half_stars_startpoint)`
+
+Converting `half_stars_startpoint` to a more redable representation, 
+by executing `as_datetime(half_stars_startpoint)`, the point in time when half-star
+ratings started to appear was `r as_datetime(half_stars_startpoint)`.
+
+
+Again, let's plot the ratings against the timestamp, but this time adding a
+vertical line indicating the point in time where half-star ratings were allowed.
 
 ```{r, echo=FALSE}
 set.seed(0)
@@ -56,6 +149,13 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>
   labs(x = 'timestamp', y = 'rating')
 ```
 
+
+A clear partition of the dataset can be observed, the first one for ratings before 
+`r as_datetime(half_stars_startpoint)` where only full-stars were allowed, 
+and a second one for ratings after that point in time where half-stars were allowed.
+Let's create another plot about the distribution of ratings in each one of these
+partitions.
+
 ```{r}
 partition_names = c(paste('before', as_datetime(half_stars_startpoint)),
                     paste('on or after', as_datetime(half_stars_startpoint)))
@@ -68,6 +168,22 @@ edx %>%
   geom_histogram(aes(x = rating), binwidth = 0.25) +
   facet_grid(~ partition)
 ```
+
+
+Now the distribution of ratings looks very different, it seems that ratings using 
+half-stars were also popular among users when they were allowed (i.e. in the second
+partition).
+
+
+Having a point in time to partition the dataset seems to be an important aspect to
+consider, since it could mean a different users behavior from one partition to 
+another.
+For example, it might be that a partucular user had a tendency to rate movies with 
+4 stars before `r as_datetime(half_stars_startpoint)`, but then after that date the 
+same user might have changed its tendency to rate 3.5 instead, since now half-stars
+were allowed.
+
+
 
 ```{r}
 #' This object-constructor function is used to generate a metamodel 
@@ -183,23 +299,3 @@ mean(pred2stars(edx$timestamp, pred) == edx$rating)
 
 See: <https://rafalab.github.io/dsbook/recommendation-systems.html>
 
-
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

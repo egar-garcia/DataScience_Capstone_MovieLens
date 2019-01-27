@@ -1,5 +1,36 @@
 library(lubridate)
 
+#' This object-constructor function is used to generate a model that returns 
+#' a as prediction the most common rating in the dataset used to fit it.
+#' @param dataset The dataset used to fit the model
+#' @return The model
+ModeModel <- function(dataset) {
+  model <- list()
+
+  model$ratings <- unique(dataset$rating)
+  model$mode <- model$ratings[which.max(tabulate(match(dataset$rating, model$ratings)))]
+
+  #' The prediction function
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction for the given dataset
+  model$predict <- function(s) {
+    model$mode
+  }
+
+  model
+}
+
+model <- ModeModel(edx)
+
+training_pred <- model$predict(edx)
+validation_pred <- model$predict(validation)
+
+sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
+        RMSE(training_pred, edx$rating),
+        mean(training_pred == edx$rating),
+        RMSE(validation_pred, validation$rating),
+        mean(validation_pred == validation$rating))
+
 edx %>%
   ggplot() +
   geom_histogram(aes(x = rating), binwidth = 0.25)
@@ -37,6 +68,11 @@ edx %>%
   ggplot() +
   geom_histogram(aes(x = rating), binwidth = 0.25) +
   facet_grid(~ partition)
+
+
+pred <- ConstantModel(edx)$predict(edx)
+RMSE(pred, edx$rating)
+mean(pred2stars(edx$timestamp, pred) == edx$rating)
 
 
 #' This object-constructor function is used to generate a metamodel 

@@ -1,3 +1,5 @@
+RMSE(4, edx$rating)
+
 ConstantModel <- function(s) {
   model <- list()
   
