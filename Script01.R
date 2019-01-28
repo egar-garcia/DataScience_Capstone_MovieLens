@@ -1,24 +1,23 @@
-library(lubridate)
-
 #' This object-constructor function is used to generate a model that returns 
 #' a as prediction the most common rating in the dataset used to fit it.
 #' @param dataset The dataset used to fit the model
 #' @return The model
 ModeModel <- function(dataset) {
   model <- list()
-
+  
   model$ratings <- unique(dataset$rating)
   model$mode <- model$ratings[which.max(tabulate(match(dataset$rating, model$ratings)))]
-
+  
   #' The prediction function
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction for the given dataset
   model$predict <- function(s) {
     model$mode
   }
-
+  
   model
 }
+
 
 model <- ModeModel(edx)
 
@@ -30,6 +29,7 @@ sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
         mean(training_pred == edx$rating),
         RMSE(validation_pred, validation$rating),
         mean(validation_pred == validation$rating))
+
 
 edx %>%
   ggplot() +
@@ -43,8 +43,9 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>
 
 
 half_stars_startpoint <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
-as_datetime(half_stars_startpoint)
 
+library(lubridate)
+as_datetime(half_stars_startpoint)
 
 set.seed(0)
 edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
@@ -70,15 +71,12 @@ edx %>%
   facet_grid(~ partition)
 
 
-pred <- ConstantModel(edx)$predict(edx)
-RMSE(pred, edx$rating)
-mean(pred2stars(edx$timestamp, pred) == edx$rating)
 
 
 #' This object-constructor function is used to generate a metamodel 
 #' that contains two models,
-#' one fitted for data before the startpoint when half stars were allowed in the ratings,
-#' and the other one fitted for data on or after that startpoint.
+#' one fitted for data before the startpoint when half stars were allowed in the
+#' ratings, and the other one fitted for data on or after that startpoint.
 #' The predictions are performed by choosing the appropriate model according to the 
 #' data's timestamp.
 #' 
@@ -87,19 +85,19 @@ mean(pred2stars(edx$timestamp, pred) == edx$rating)
 #' @param base_model_generator The function used to generate the base models,
 #'    it should receive a dataset to fit the model and have a prediction function
 #' @return The created metamodel
-PartitionedtModel <- function(dataset, base_model_generator) {
+PartitionedModel <- function(dataset, base_model_generator) {
   partitioned_model <- list()
-
+  
   # Spliting the dataset in 2,
   # one set for data before the startpoint when half stars were allowed
   dataset1 <- dataset %>% filter(timestamp < half_stars_startpoint)
   # and the other one for the data on or after the startpoint when half stars were allowed
   dataset2 <- dataset %>% filter(timestamp >= half_stars_startpoint)
-
+  
   # Generating a model for each dataset
   partitioned_model$model1 <- base_model_generator(dataset1)
   partitioned_model$model2 <- base_model_generator(dataset2)
-
+  
   #' Performs a prediction with the combined fitted models,
   #' it tries to do the prediction with the respective model based on the timestamp,
   #' but if the prediction can not be performed then the other model is attempted.
@@ -109,7 +107,7 @@ PartitionedtModel <- function(dataset, base_model_generator) {
     # Performing the predictions on the whole dataset for each one of the models
     pred1 <- partitioned_model$model1$predict(s)
     pred2 <- partitioned_model$model2$predict(s)
-
+    
     # Selecting the prediction to use according to the data's timestamp,
     # if a prediction is missing the prediction for the other model is used
     s %>%
@@ -134,47 +132,65 @@ pred2stars <- function(timestamp, pred) {
   rounded_pred <- ifelse(timestamp < half_stars_startpoint,
                          round(pred),
                          round(pred * 2)/2)
-
+  
   # Making sure the rating is not smaller that 1 or bigger than 5  
   min(max(rounded_pred, 1), 5)
 }
 
 
-#' This object-constructor function is used to generate a model
-#' that always returns as prediction the average of the rating in the
-#' given dataset used to fit the model.
-#' @param dataset The dataset used to fit the model
-#' @return The model
-SimpleAvgModel <- function(dataset) {
-  model <- list()
+#' This function is used to report the performance of a model in terms of
+#' RMSE and Accuracy for the training and validation sets.
+#' It evaluates the performance in two modes:
+#' 1) using the whole training set to fit the model and
+#' 2) partitioning the training set before and on-or-after 
+#' the startpoint when half stars were allowed.
+#' @param model_generator The constructor function to generate the model
+#' @returns A dataset reporting the performance results 
+get_performance_metrics <- function(model_generator) {
+  dataset_names <- c('Training', 'Validation')
+  datasets <- c()
+  modes <- c()
+  rmses <- c()
+  accuracies <- c()
+  counter <- 0
 
-  # The average of ratings
-  model$mu <- mean(dataset$rating)
+  for (is_partitioned in c(FALSE, TRUE)) {
+    # Chosing the mode PARTITIONED or WHOLE
+    if (is_partitioned) {
+      model <- PartitionedModel(edx, model_generator)
+    } else {
+      model <- model_generator(edx)
+    }
 
-  #' The prediction function
-  #' @param s The dataset used to perform the prediction of
-  #' @return A vector containing the prediction
-  model$predict <- function(s) {
-    model$mu
+    for (dataset_name in dataset_names) {
+      # Chosing the dataset to evaluate
+      if (dataset_name == 'Training') {
+        ds <- edx
+      } else {
+        ds <- validation
+      }
+
+      counter <- counter + 1
+
+      # Getting the prediction for the chosen dataset
+      pred <- model$predict(ds)
+
+      datasets[counter] <- dataset_name
+      modes[counter] <- ifelse(is_partitioned, 'PARTITIONED', 'WHOLE')
+
+      # Calculating the RMSE
+      rmses[counter] <- RMSE(pred, ds$rating)
+      # Calculating the accuracy
+      accuracies[counter] <- mean(pred2stars(ds$timestamp, pred) == ds$rating)
+    }
   }
 
-  model
+  data.frame('Dataset' = datasets,
+             'Mode' = modes,
+             'RMSE' = rmses,
+             'Accuracy' = accuracies)
 }
 
-pred <- SimpleAvgModel(edx)$predict(edx)
-RMSE(pred, edx$rating)
-# 1.060331
-mean(pred2stars(edx$timestamp, pred) == edx$rating)
-# 0.2876016
-
-
-pred <- PartitionedtModel(edx, SimpleAvgModel)$predict(edx)
-RMSE(pred, edx$rating)
-# 1.059362
-mean(pred2stars(edx$timestamp, pred) == edx$rating)
-# 0.2876016
-
-
-
-
+get_performance_metrics(ModeModel)
+get_performance_metrics(SimpleAvgModel)
 

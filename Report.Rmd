@@ -9,7 +9,6 @@ output:
 
 ```{r, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(lubridate)
 ```
 
 
@@ -80,7 +79,7 @@ sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
 ```
 
 
-### Analysis of the data
+### Analysing the data
 
 Let's take an initial look at how the ratings are distributed by plotting an
 histogram to account the amount of the different ratings given by the customers.
@@ -124,9 +123,16 @@ half_stars_startpoint <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
 ```
 
 
-Converting `half_stars_startpoint` to a more redable representation, 
-by executing `as_datetime(half_stars_startpoint)`, the point in time when half-star
-ratings started to appear was `r as_datetime(half_stars_startpoint)`.
+Converting `half_stars_startpoint` to a more redable representation using the following
+code:
+
+```{r}
+library(lubridate)
+as_datetime(half_stars_startpoint)
+```
+
+It can be seen that the point in time when half-star ratings started to appear
+was on `r as_datetime(half_stars_startpoint)`.
 
 
 Again, let's plot the ratings against the timestamp, but this time adding a
@@ -184,12 +190,14 @@ same user might have changed its tendency to rate 3.5 instead, since now half-st
 were allowed.
 
 
+### Refining the metodology to use partitioned models
+
 
 ```{r}
 #' This object-constructor function is used to generate a metamodel 
 #' that contains two models,
-#' one fitted for data before the startpoint when half stars were allowed in the ratings,
-#' and the other one fitted for data on or after that startpoint.
+#' one fitted for data before the startpoint when half stars were allowed in the
+#' ratings, and the other one fitted for data on or after that startpoint.
 #' The predictions are performed by choosing the appropriate model according to the 
 #' data's timestamp.
 #' 
@@ -198,7 +206,7 @@ were allowed.
 #' @param base_model_generator The function used to generate the base models,
 #'    it should receive a dataset to fit the model and have a prediction function
 #' @return The created metamodel
-PartitionedtModel <- function(dataset, base_model_generator) {
+PartitionedModel <- function(dataset, base_model_generator) {
   partitioned_model <- list()
 
   # Spliting the dataset in 2,
@@ -235,6 +243,7 @@ PartitionedtModel <- function(dataset, base_model_generator) {
 }
 ```
 
+
 ```{r}
 #' Converts a prediction (which is a floating point number) to a one used to 
 #' represent ratings given by stars,
@@ -253,6 +262,67 @@ pred2stars <- function(timestamp, pred) {
 ```
 
 
+```{r}
+#' This function is used to report the performance of a model in terms of
+#' RMSE and Accuracy for the training and validation sets.
+#' It evaluates the performance in two modes:
+#' 1) using the whole training set to fit the model and
+#' 2) partitioning the training set before and on-or-after 
+#' the startpoint when half stars were allowed.
+#' @param model_generator The constructor function to generate the model
+#' @returns A dataset reporting the performance results 
+get_performance_metrics <- function(model_generator) {
+  dataset_names <- c('Training', 'Validation')
+  datasets <- c()
+  modes <- c()
+  rmses <- c()
+  accuracies <- c()
+  counter <- 0
+
+  for (is_partitioned in c(FALSE, TRUE)) {
+    # Chosing the mode PARTITIONED or WHOLE
+    if (is_partitioned) {
+      model <- PartitionedModel(edx, model_generator)
+    } else {
+      model <- model_generator(edx)
+    }
+
+    for (dataset_name in dataset_names) {
+      # Chosing the dataset to evaluate
+      if (dataset_name == 'Training') {
+        ds <- edx
+      } else {
+        ds <- validation
+      }
+
+      counter <- counter + 1
+
+      # Getting the prediction for the chosen dataset
+      pred <- model$predict(ds)
+
+      datasets[counter] <- dataset_name
+      modes[counter] <- ifelse(is_partitioned, 'PARTITIONED', 'WHOLE')
+
+      # Calculating the RMSE
+      rmses[counter] <- RMSE(pred, ds$rating)
+      # Calculating the accuracy
+      accuracies[counter] <- mean(pred2stars(ds$timestamp, pred) == ds$rating)
+    }
+  }
+
+  data.frame('Dataset' = datasets,
+             'Mode' = modes,
+             'RMSE' = rmses,
+             'Accuracy' = accuracies)
+}
+```
+
+
+```{r results = 'asis'}
+knitr::kable(get_performance_metrics(ModeModel),
+             caption = "Results for the Mode based model")
+```
+
 
 ## Methods
 
@@ -264,7 +334,7 @@ pred2stars <- function(timestamp, pred) {
 #' given dataset used to fit the model.
 #' @param dataset The dataset used to fit the model
 #' @return The model
-SimpleAvgModel <- function(dataset) {
+AvgModel <- function(dataset) {
   model <- list()
 
   # The average of ratings
@@ -282,16 +352,9 @@ SimpleAvgModel <- function(dataset) {
 ```
 
 
-```{r}
-pred <- SimpleAvgModel(edx)$predict(edx)
-```
-
-```{r}
-RMSE(pred, edx$rating)
-```
-
-```{r}
-mean(pred2stars(edx$timestamp, pred) == edx$rating)
+```{r results = 'asis', echo=FALSE}
+knitr::kable(get_performance_metrics(AvgModel),
+             caption = "Results for the Average based model")
 ```
 
 
