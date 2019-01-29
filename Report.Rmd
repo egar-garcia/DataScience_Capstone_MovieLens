@@ -12,9 +12,9 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-## Overview
+# Overview
 
-## Methodology
+# Methodology
 
 To evaluate the different (machine learning) methods tested in this report, an
 object-oriented approach is going to be used, each method is going to be represented 
@@ -79,7 +79,7 @@ sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
 ```
 
 
-### Analysing the data
+## Analysing the data
 
 Let's take an initial look at how the ratings are distributed by plotting an
 histogram to account the amount of the different ratings given by the customers.
@@ -190,7 +190,16 @@ same user might have changed its tendency to rate 3.5 instead, since now half-st
 were allowed.
 
 
-### Refining the metodology to use partitioned models
+## Refining the metodology to use partitioned models
+
+Given the previous observation that the dataset can be significantly different
+in two partitions (before `r as_datetime(half_stars_startpoint)` and on-or-after that),
+it would be convenient to train and predict a particular model in the two separate
+partitions and then merging the prediction results for the whole set.
+The following function creates an object in charge of doing that,
+for a given method it fits a modelfor each one of the partitions,
+and it has a prediction function that merges the predictions 
+for the first and second models according to the timestamp.
 
 
 ```{r}
@@ -212,7 +221,7 @@ PartitionedModel <- function(dataset, base_model_generator) {
   # Spliting the dataset in 2,
   # one set for data before the startpoint when half stars were allowed
   dataset1 <- dataset %>% filter(timestamp < half_stars_startpoint)
-  # and the other one for the data on or after the startpoint when half stars were allowed
+  # the other one for the data on or after the startpoint when half stars were allowed
   dataset2 <- dataset %>% filter(timestamp >= half_stars_startpoint)
 
   # Generating a model for each dataset
@@ -244,6 +253,13 @@ PartitionedModel <- function(dataset, base_model_generator) {
 ```
 
 
+To meassure the accuracy it also would be convenient to have a function that 
+rounds the predictions to the actual number to represent stars, either full or half.
+That means that according to the timestamp, before the 
+half-star starpoint only values in $\{1, 2, 3, 4, 5\}$ are allowed,
+and on or after that values in $\{1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5\}$ are allowed.
+The folowing function performs such rounding:
+
 ```{r}
 #' Converts a prediction (which is a floating point number) to a one used to 
 #' represent ratings given by stars,
@@ -261,6 +277,12 @@ pred2stars <- function(timestamp, pred) {
 }
 ```
 
+
+To test a particular method if would be very helpful to have a function
+that fits the respective model to either to the whole training set or the partitions
+given by the half-star startpoint, and then meassures the prediction performance against
+the training and validation sets. The following function does exaclty that and returns
+the results in a dataset, which can be included as a table in this document.
 
 ```{r}
 #' This function is used to report the performance of a model in terms of
@@ -318,15 +340,28 @@ get_performance_metrics <- function(model_generator) {
 ```
 
 
+## Putting all together
+
+To get the performance of a specific (machine learning) method,
+the command `get_performance_metrics(model_generator)`
+would be used, where `model_generator` is the constructor function of the 
+respective model.
+
+
+For example, to get the performance of the previosly defined model that 
+always predict the most common rating of the training set,
+the following command calculates the prediction performance
+and includes the results as a table in this report.
+
 ```{r results = 'asis'}
 knitr::kable(get_performance_metrics(ModeModel),
              caption = "Results for the Mode based model")
 ```
 
 
-## Methods
+# Methods
 
-### Simple Average
+## Simple Average
 
 ```{r}
 #' This object-constructor function is used to generate a model
@@ -358,7 +393,7 @@ knitr::kable(get_performance_metrics(AvgModel),
 ```
 
 
-### Pseudo Linear Model
+## Pseudo Linear Model
 
 See: <https://rafalab.github.io/dsbook/recommendation-systems.html>
 
