@@ -397,7 +397,42 @@ knitr::kable(get_performance_metrics(AvgModel),
 ```
 
 
-## Pseudo Linear Model
+## Linear Like Model
 
 See: <https://rafalab.github.io/dsbook/recommendation-systems.html>
+
+```{r}
+LinearLikeBiasBasedModel <- function(s) {
+  model <- list()
+
+  model$mu <- mean(s$rating)
+
+  model$movie_info <- s %>%
+    group_by(movieId) %>%
+    summarise(movie_bias = mean(rating - model$mu))
+
+  model$user_info <- s %>%
+    left_join(model$movie_info, by = 'movieId') %>%
+    group_by(userId) %>%
+    summarise(user_bias = mean(rating - movie_bias - model$mu))
+
+  model$predict <- function(t) {
+    t %>%
+      left_join(model$movie_info, by = 'movieId') %>%
+      left_join(model$user_info, by = 'userId') %>%
+      mutate(pred = model$mu +
+               ifelse(!is.na(movie_bias), movie_bias, 0) +
+               ifelse(!is.na(user_bias), user_bias, 0)) %>%
+      .$pred
+  }
+
+  model
+}
+```
+
+```{r results = 'asis', echo=FALSE}
+knitr::kable(get_performance_metrics(LinearLikeBiasBasedModel),
+             caption = "Results for the Average based model")
+```
+
 

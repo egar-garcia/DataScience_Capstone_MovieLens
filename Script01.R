@@ -218,3 +218,96 @@ AvgModel <- function(dataset) {
 
 get_performance_metrics(AvgModel)
 
+
+
+LinearLikeBiasBasedModel <- function(s) {
+  model <- list()
+  
+  model$mu <- mean(s$rating)
+  
+  model$movie_info <- s %>%
+    group_by(movieId) %>%
+    summarise(movie_bias = mean(rating - model$mu))
+  
+  model$user_info <- s %>%
+    left_join(model$movie_info, by = 'movieId') %>%
+    group_by(userId) %>%
+    summarise(user_bias = mean(rating - movie_bias - model$mu))
+  
+  model$predict <- function(t) {
+    t %>%
+      left_join(model$movie_info, by = 'movieId') %>%
+      left_join(model$user_info, by = 'userId') %>%
+      mutate(pred = model$mu +
+               ifelse(!is.na(movie_bias), movie_bias, 0) +
+               ifelse(!is.na(user_bias), user_bias, 0)) %>%
+      .$pred
+  }
+  
+  model
+}
+
+get_performance_metrics(LinearLikeBiasBasedModel)
+
+
+
+RF_Rec <- function(s) {
+  model <- list()
+
+  model$ratings <- sort(unique(s$rating))
+
+  model$rating_movie_cols <- paste('rating_movie', model$ratings, sep = '_')
+  model$rating_user_cols <- paste('rating_user', model$ratings, sep = '_')
+
+  model$movie_info <- s %>%
+    group_by(movieId, rating) %>%
+    summarise(freq = n()) %>%
+    spread(rating, freq, sep = '_movie_', fill = 0) %>%
+    group_by(movieId) %>%
+    summarise_at(model$rating_movie_cols, funs(sum(.))) %>%
+    left_join(s %>% group_by(movieId) %>% summarise(movie_avg = mean(rating)),
+              by = 'movieId')
+
+  model$user_info <- s %>%
+    group_by(userId, rating) %>%
+    summarise(freq = n()) %>%
+    spread(rating, freq, sep = '_user_', fill = 0) %>%
+    group_by(userId) %>%
+    summarise_at(model$rating_user_cols, funs(sum(.))) %>%
+    left_join(s %>% group_by(userId) %>% summarise(user_avg = mean(rating)),
+              by = 'userId')
+
+  model$predict <- function(t) {
+    pred_dataset <- t %>%
+      left_join(model$movie_info, by = 'movieId') %>%
+      left_join(model$user_info, by = 'userId')
+
+    max_prod <- NULL
+    selected_rating <- NULL
+    for (i in 1:length(model$ratings)) {
+      prod <- (pred_dataset[[model$rating_movie_cols[i]]] + 1 +
+               ifelse(round(pred_dataset$movie_avg) == model$ratings[i], 1, 0)) *
+              (pred_dataset[[model$rating_user_cols[i]]] + 1 +
+               ifelse(round(pred_dataset$user_avg) == model$ratings[i], 1, 0))
+
+      if (i <= 1) {
+        selected_rating <- rep(model$ratings[i], nrow(t))
+        max_prod <- prod
+      } else {
+        selected_rating <- ifelse(prod > max_prod, model$ratings[i], selected_rating)
+        max_prod <- ifelse(prod > max_prod, prod, max_prod)
+      }
+    }
+
+    selected_rating
+  }
+
+  model
+}
+
+get_performance_metrics(RF_Rec)
+
+model <- RF_Rec(edx)
+
+
+
