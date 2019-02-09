@@ -17,13 +17,13 @@ knitr::opts_chunk$set(echo = TRUE)
 # Methodology
 
 To evaluate the different (machine learning) methods tested in this report, an
-object-oriented approach is going to be used, each method is going to be represented 
+object-oriented approach is used, each method is going to be represented 
 by a model which would be generated through the construction of an object.
+
 To generate a model, the constructor function receives a dataset (the training set) 
 which is used to fit the model an construct its object.
 The model's object includes a `predict` function used to perform a prediction
 for another dataset (which could be the set for testing, validation, production, etc.).
-
 
 For example, the following function creates and object to represent a model that always
 gives the most common rate (the mode) of the training set as prediction:
@@ -58,8 +58,8 @@ model <- ModeModel(edx)
 ```
 
 
-Then this model can be used to make predictions, like in the following code predicting
-agains the training and the validation sets:
+Then this model can be used to make predictions, p.e. the following code makes
+predictions using the training and the validation sets:
 
 ```{r}
 training_pred <- model$predict(edx)
@@ -93,12 +93,14 @@ edx %>%
 
 It can be observed that ratings can be interpreted as the number of starts from 1 to 5
 that users give to a movie, however it can be seen that ratings ending with a half 
-are used, at first impression looks like half start ratings are not very popular among users.
+are used, at first impression looks like half start ratings are not very popular
+among users.
 
 
 Let's visualize the data from another point of view, this time plotting
 the ratings against the timestamp. For exploratory purposes lets just plot
-using a small subset of the dataset, since using the whole one might take a while.
+using a small subset of the dataset, since using the whole one might take a lot of
+time and resources.
 
 ```{r, echo=FALSE}
 set.seed(0)
@@ -113,9 +115,11 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>
 
 
 Now something interesting can be observed, it looks like ratings ending in half-stars
-were allowed after certain point in time, and before that just full-stars were allowed.
+were allowed after certain point in time, and before that time just full-stars were
+allowed.
 
-To find the point in time were rating ending in half star started to appear, the following code can be used. In basically gets the minimum timestamp in the dataset
+To find the point in time were ratings ending in half star started to appear,
+the following code can be used. In basically gets the minimum timestamp in the dataset
 where a rating with half star is found.
 
 ```{r}
@@ -257,8 +261,8 @@ To meassure the accuracy it also would be convenient to have a function that
 rounds the predictions to the actual number to represent stars, either full or half.
 That means that according to the timestamp, before the 
 half-star starpoint only values in $\{1, 2, 3, 4, 5\}$ are allowed,
-and on or after that values in $\{1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5\}$ are allowed.
-The folowing function performs such rounding:
+and on or after the startpoint values in $\{1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5\}$ 
+are allowed. The folowing function performs such rounding:
 
 ```{r}
 #' Converts a prediction (which is a floating point number) to a one used to 
@@ -282,7 +286,7 @@ To test a particular method if would be very helpful to have a function
 that fits the respective model to either to the whole training set or the partitions
 given by the half-star startpoint, and then meassures the prediction performance against
 the training and validation sets. The following function does exaclty that and returns
-the results in a dataset, which can be included as a table in this document.
+the results in a dataset, which can be included as a table in this report.
 
 ```{r}
 #' This function is used to report the performance of a model in terms of

@@ -47,6 +47,7 @@ half_stars_startpoint <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
 library(lubridate)
 as_datetime(half_stars_startpoint)
 
+
 set.seed(0)
 edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
   ggplot(aes(x = as_datetime(timestamp), y = rating)) +
@@ -59,6 +60,7 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>
             color = "red", vjust = -1, angle = 90) +
   labs(x = 'timestamp', y = 'rating')
 
+
 partition_names = c(paste('before', as_datetime(half_stars_startpoint)),
                     paste('on or after', as_datetime(half_stars_startpoint)))
 
@@ -69,7 +71,6 @@ edx %>%
   ggplot() +
   geom_histogram(aes(x = rating), binwidth = 0.25) +
   facet_grid(~ partition)
-
 
 
 
@@ -91,7 +92,7 @@ PartitionedModel <- function(dataset, base_model_generator) {
   # Spliting the dataset in 2,
   # one set for data before the startpoint when half stars were allowed
   dataset1 <- dataset %>% filter(timestamp < half_stars_startpoint)
-  # and the other one for the data on or after the startpoint when half stars were allowed
+  # the other one for the data on or after the startpoint when half stars were allowed
   dataset2 <- dataset %>% filter(timestamp >= half_stars_startpoint)
   
   # Generating a model for each dataset
@@ -153,7 +154,7 @@ get_performance_metrics <- function(model_generator) {
   rmses <- c()
   accuracies <- c()
   counter <- 0
-
+  
   for (is_partitioned in c(FALSE, TRUE)) {
     # Chosing the mode PARTITIONED or WHOLE
     if (is_partitioned) {
@@ -161,7 +162,7 @@ get_performance_metrics <- function(model_generator) {
     } else {
       model <- model_generator(edx)
     }
-
+    
     for (dataset_name in dataset_names) {
       # Chosing the dataset to evaluate
       if (dataset_name == 'Training') {
@@ -169,22 +170,22 @@ get_performance_metrics <- function(model_generator) {
       } else {
         ds <- validation
       }
-
+      
       counter <- counter + 1
-
+      
       # Getting the prediction for the chosen dataset
       pred <- model$predict(ds)
-
+      
       datasets[counter] <- dataset_name
       modes[counter] <- ifelse(is_partitioned, 'PARTITIONED', 'WHOLE')
-
+      
       # Calculating the RMSE
       rmses[counter] <- RMSE(pred, ds$rating)
       # Calculating the accuracy
       accuracies[counter] <- mean(pred2stars(ds$timestamp, pred) == ds$rating)
     }
   }
-
+  
   data.frame('Dataset' = datasets,
              'Mode' = modes,
              'RMSE' = rmses,
@@ -192,5 +193,28 @@ get_performance_metrics <- function(model_generator) {
 }
 
 get_performance_metrics(ModeModel)
-get_performance_metrics(SimpleAvgModel)
+
+
+#' This object-constructor function is used to generate a model
+#' that always returns as prediction the average of the rating in the
+#' given dataset used to fit the model.
+#' @param dataset The dataset used to fit the model
+#' @return The model
+AvgModel <- function(dataset) {
+  model <- list()
+  
+  # The average of ratings
+  model$mu <- mean(dataset$rating)
+  
+  #' The prediction function
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction
+  model$predict <- function(s) {
+    model$mu
+  }
+  
+  model
+}
+
+get_performance_metrics(AvgModel)
 
