@@ -201,7 +201,7 @@ in two partitions (before `r as_datetime(half_stars_startpoint)` and on-or-after
 it would be convenient to train and predict a particular model in the two separate
 partitions and then merging the prediction results for the whole set.
 The following function creates an object in charge of doing that,
-for a given method it fits a modelfor each one of the partitions,
+for a given method it fits a model for each one of the partitions,
 and it has a prediction function that merges the predictions 
 for the first and second models according to the timestamp.
 
@@ -221,34 +221,29 @@ for the first and second models according to the timestamp.
 #' @return The created metamodel
 PartitionedModel <- function(dataset, base_model_generator) {
   partitioned_model <- list()
-
+  
   # Spliting the dataset in 2,
   # one set for data before the startpoint when half stars were allowed
   dataset1 <- dataset %>% filter(timestamp < half_stars_startpoint)
   # the other one for the data on or after the startpoint when half stars were allowed
   dataset2 <- dataset %>% filter(timestamp >= half_stars_startpoint)
-
+  
   # Generating a model for each dataset
   partitioned_model$model1 <- base_model_generator(dataset1)
   partitioned_model$model2 <- base_model_generator(dataset2)
-
+  
   #' Performs a prediction with the combined fitted models,
-  #' it tries to do the prediction with the respective model based on the timestamp,
-  #' but if the prediction can not be performed then the other model is attempted.
+  #' it tries to do the prediction with the respective model based on the timestamp.
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction for each row of the dataset
   partitioned_model$predict <- function(s) {
     # Performing the predictions on the whole dataset for each one of the models
     pred1 <- partitioned_model$model1$predict(s)
     pred2 <- partitioned_model$model2$predict(s)
-
-    # Selecting the prediction to use according to the data's timestamp,
-    # if a prediction is missing the prediction for the other model is used
+    
+    # Selecting the prediction to use according to the data's timestamp.
     s %>%
-      mutate(pred1 = pred1, pred2 = pred2) %>%
-      mutate(pred = ifelse(timestamp < half_stars_startpoint,
-                           ifelse(!is.na(pred1), pred1, pred2),
-                           ifelse(!is.na(pred2), pred2, pred1))) %>%
+      mutate(pred = ifelse(timestamp < half_stars_startpoint, pred1, pred2)) %>%
       .$pred
   }
   
@@ -275,9 +270,10 @@ pred2stars <- function(timestamp, pred) {
   rounded_pred <- ifelse(timestamp < half_stars_startpoint,
                          round(pred),
                          round(pred * 2)/2)
-
+  
   # Making sure the rating is not smaller that 1 or bigger than 5  
-  min(max(rounded_pred, 1), 5)
+  rounded_pred <- ifelse(rounded_pred >= 1, rounded_pred, 1)
+  rounded_pred <- ifelse(rounded_pred <= 5, rounded_pred, 5)
 }
 ```
 
@@ -432,7 +428,146 @@ LinearLikeBiasBasedModel <- function(s) {
 
 ```{r results = 'asis', echo=FALSE}
 knitr::kable(get_performance_metrics(LinearLikeBiasBasedModel),
-             caption = "Results for the Average based model")
+             caption = "Results for the Linear Like model")
 ```
 
 
+## Naive Bayes Model
+
+```{r}
+RatingNaiveBayes <- function(s) {
+  model <- list()
+  
+  model$ratings <- sort(unique(s$rating))
+  
+  model$rating_movie_cols <- paste('rating_movie', model$ratings, sep = '_')
+  model$rating_user_cols <- paste('rating_user', model$ratings, sep = '_')
+  
+  model$movie_info <- s %>%
+    group_by(movieId, rating) %>%
+    summarise(freq = n()) %>%
+    spread(rating, freq, sep = '_movie_', fill = 0) %>%
+    left_join(s %>% group_by(movieId) %>% summarise(num_ratings = n()),
+              by = 'movieId') %>%
+    group_by(movieId) %>%
+    summarise_at(model$rating_movie_cols, funs(sum(.) / num_ratings))
+  
+  model$user_info <- s %>%
+    group_by(userId, rating) %>%
+    summarise(freq = n()) %>%
+    spread(rating, freq, sep = '_user_', fill = 0) %>%
+    left_join(s %>% group_by(userId) %>% summarise(num_ratings = n()),
+              by = 'userId') %>%
+    group_by(userId) %>%
+    summarise_at(model$rating_user_cols, funs(sum(.) / num_ratings))
+  
+  model$predict <- function(t) {
+    pred_dataset <- t %>%
+      left_join(model$movie_info, by = 'movieId') %>%
+      left_join(model$user_info, by = 'userId')
+
+    pred_dataset[is.na(pred_dataset)] <- 1.0 / length(model$ratings)
+    
+    max_prod <- NULL
+    selected_rating <- NULL
+    for (i in 1:length(model$ratings)) {
+      prod <- pred_dataset[[model$rating_movie_cols[i]]] *
+        pred_dataset[[model$rating_user_cols[i]]]
+      
+      if (i <= 1) {
+        selected_rating <- rep(model$ratings[i], nrow(t))
+        max_prod <- prod
+      } else {
+        selected_rating <- ifelse(prod >= max_prod, model$ratings[i], selected_rating)
+        max_prod <- ifelse(prod >= max_prod, prod, max_prod)
+      }
+    }
+    
+    selected_rating
+  }
+  
+  model
+}
+```
+
+```{r results = 'asis', echo=FALSE}
+knitr::kable(get_performance_metrics(RatingNaiveBayes),
+             caption = "Results for the Naive Bayes based model")
+```
+
+
+## RF-Rec Model
+
+<https://www.researchgate.net/publication/224262836_RF-Rec_Fast_and_Accurate_Computation_of_Recommendations_Based_on_Rating_Frequencies>
+
+```{r}
+RF_Rec <- function(s) {
+  model <- list()
+
+  model$mu <- mean(s$rating)
+
+  model$ratings <- sort(unique(s$rating))
+
+  model$rating_movie_cols <- paste('rating_movie', model$ratings, sep = '_')
+  model$rating_user_cols <- paste('rating_user', model$ratings, sep = '_')
+
+  model$movie_info <- s %>%
+    group_by(movieId, rating) %>%
+    summarise(freq = n()) %>%
+    spread(rating, freq, sep = '_movie_', fill = 0) %>%
+    group_by(movieId) %>%
+    summarise_at(model$rating_movie_cols, funs(sum(.))) %>%
+    left_join(s %>% group_by(movieId) %>% summarise(movie_avg = mean(rating)),
+              by = 'movieId')
+
+  model$user_info <- s %>%
+    group_by(userId, rating) %>%
+    summarise(freq = n()) %>%
+    spread(rating, freq, sep = '_user_', fill = 0) %>%
+    group_by(userId) %>%
+    summarise_at(model$rating_user_cols, funs(sum(.))) %>%
+    left_join(s %>% group_by(userId) %>% summarise(user_avg = mean(rating)),
+              by = 'userId')
+
+  model$predict <- function(t) {
+    pred_dataset <- t %>%
+      left_join(model$movie_info, by = 'movieId') %>%
+      left_join(model$user_info, by = 'userId')
+
+    pred_dataset$movie_avg[is.na(pred_dataset$movie_avg)] <- model$mu
+    pred_dataset$user_avg[is.na(pred_dataset$user_avg)] <- model$mu
+    pred_dataset[is.na(pred_dataset)] <- 0
+
+    max_prod <- NULL
+    selected_rating <- NULL
+    for (i in 1:length(model$ratings)) {
+      prod <- (pred_dataset[[model$rating_movie_cols[i]]] + 1 +
+               ifelse(round(pred_dataset$movie_avg) == model$ratings[i], 1, 0)) *
+              (pred_dataset[[model$rating_user_cols[i]]] + 1 +
+               ifelse(round(pred_dataset$user_avg) == model$ratings[i], 1, 0))
+
+      if (i <= 1) {
+        selected_rating <- rep(model$ratings[i], nrow(t))
+        max_prod <- prod
+      } else {
+        selected_rating <- ifelse(prod > max_prod, model$ratings[i], selected_rating)
+        max_prod <- ifelse(prod > max_prod, prod, max_prod)
+      }
+    }
+
+    selected_rating
+  }
+
+  model
+}
+```
+
+```{r results = 'asis', echo=FALSE}
+knitr::kable(get_performance_metrics(RF_Rec),
+             caption = "Results for the RF based model")
+```
+
+
+## Matrix Factorization
+
+<https://cran.r-project.org/web/packages/recosystem/vignettes/introduction.html>

@@ -757,6 +757,165 @@ mean(4 == tmp_rubric$rating)
 # 0.2874203
 
 
+#-------------------------
+edx1 <- edx %>% filter(timestamp < half_stars_startpoint)
+edx2 <- edx %>% filter(timestamp >= half_stars_startpoint)
+
 
 #-------------------------
+
+library(recosystem)
+
+train_data <- data_memory(user_index = edx1$userId, item_index = edx1$movieId, 
+                          rating = edx1$rating, index1 = T)
+
+recommender <- Reco()
+recommender$train(train_data, opts = c(dim = 30, costp_l2 = 0.1, costq_l2 = 0.1, 
+                                       lrate = 0.1, niter = 100, nthread = 6,
+                                       verbose = F))
+
+tmp_pred <- recommender$predict(train_data, out_memory())
+
+RMSE(tmp_pred, edx1$rating)
+mean(round(tmp_pred) == edx1$rating)
+
+#-----------------------
+
+# Getting the available genres
+genres <- unique(unlist(strsplit(edx$genres, '|', fixed = TRUE)))
+genres <- genres[!is.na(genres) & genres != '(no genres listed)']
+
+# Generating the column names to use in order to identify the presence of a genre
+genre_cols <- str_replace_all(tolower(genres), '-', '_')
+
+set_one_hot_genres <- function(t) {
+  # Adding a column for each genre with a boolean value to indicate 
+  # the presence of the respective genre.
+  for (i in 1:length(genres)) {
+    t[[genre_cols[i]]] <- str_detect(t$genres, genres[i])
+    t[[genre_cols[i]]][which(is.na(t[[genre_cols[i]]]))] <- FALSE
+  }
+  
+  # Removing previous column containing genres as a text-list
+  t %>% select(-genres)
+}
+
+ext_edx <- set_one_hot_genres(edx)
+
+
+# Colums used to store the weights of the genres in a movie.
+genre_user_weight_cols <- paste(genre_cols, 'user_weight', sep = '_')
+# Colums used to store the weights of the genres in an user.
+genre_movie_weight_cols <- paste(genre_cols, 'movie_weight', sep = '_')
+
+# Grouping the dataset by user to get the weights per genre.
+# The weight is intended to reflect the user's proportion of rated movies
+# with a particular genre.
+user_genre_weights <- ext_edx %>%
+  group_by(userId) %>%
+  summarise_at(genre_cols, funs(user_weight = mean(.)))
+
+
+# For each row in the dataset replacing the value of the genre column
+# for the user's weight if TRUE, or 0 (zero) if FALSE.
+# The idea is that each row contains the apportation of the customer's 
+# preference per genre.
+tmp_dataset <- ext_edx %>%
+  left_join(user_genre_weights, by = 'userId')
+for (i in 1:length(genre_cols)) {
+  tmp_dataset[[genre_cols[i]]] <- 
+    ifelse(tmp_dataset[[genre_cols[i]]],
+           tmp_dataset[[genre_user_weight_cols[i]]],
+           0)
+}
+
+# Grouping the dataset by movie and summing the weights of all
+# the users that rated the movie.
+# The intention is having the sums of the customers preferences per genre
+# for each one of the movies.
+movie_genre_weights <- tmp_dataset %>%
+  group_by(movieId) %>%
+  summarise_at(genre_cols, funs(movie_weight = sum(.)))
+
+# For each one of the movies, the sums of the customers preferences per genre
+# are normalized to sum 1 (if any), these would be the genre weights per movie
+# and they intent to represent the proportion that a movie has of a 
+# particular genre.
+sum_movie_genre_weights <- rowSums(movie_genre_weights[genre_movie_weight_cols])
+for (i in 1:length(genre_cols)) {
+  movie_genre_weights[[genre_movie_weight_cols[i]]] <-
+    ifelse(sum_movie_genre_weights != 0,
+           movie_genre_weights[[genre_movie_weight_cols[i]]] / sum_movie_genre_weights,
+           0)
+}
+
+rm(tmp_dataset, i, sum_movie_genre_weights)
+
+
+mu <- mean(ext_edx$rating)
+
+movie_info <- ext_edx %>%
+  group_by(movieId) %>%
+  summarise(movie_bias = mean(rating - mu)) %>%
+  left_join(movie_genre_weights, by = 'movieId')
+
+user_info <- ext_edx %>%
+  left_join(movie_info, by = 'movieId') %>%
+  group_by(userId) %>%
+  summarise(user_bias = mean(rating - movie_bias - mu))
+
+
+tmp_user_info <- ext_edx %>%
+  left_join(movie_genre_weights, by = 'movieId')
+for (i in 1:length(genre_cols)) {
+  tmp_user_info[[genre_cols[i]]] <-
+    ifelse(tmp_user_info[[genre_cols[i]]],
+           tmp_user_info[[genre_movie_weight_cols[i]]],
+           0)
+}
+tmp_sum_user_genre_weights <- rowSums(tmp_user_info[genre_cols])
+for (i in 1:length(genre_cols)) {
+  tmp_user_info[[genre_cols[i]]] <-
+    ifelse(tmp_sum_user_genre_weights != 0,
+           tmp_user_info[[genre_cols[i]]] / tmp_sum_user_genre_weights,
+           0)
+}
+
+user_info <- tmp_user_info %>%
+  left_join(movie_info, by = 'movieId') %>%
+  left_join(user_info, by = 'userId') %>%
+  group_by(userId) %>%
+  summarise_at(genre_cols,
+               funs(user_bias = ifelse(sum(. != 0), 
+                                       sum((rating - mu - movie_bias - user_bias) * .) / sum(. != 0),
+                                       NA))) %>%
+  left_join(user_info, by = 'userId')
+
+genre_user_bias_cols <- paste(genre_cols, 'user_bias', sep = '_')
+
+
+predict <- function(t) {
+  t <- t %>%
+    left_join(movie_info, by = 'movieId') %>%
+    left_join(user_info, by = 'userId') %>%
+    mutate(pred = mu +
+             ifelse(!is.na(movie_bias), movie_bias, 0) +
+             ifelse(!is.na(user_bias), user_bias, 0))
+  
+  for (i in 1:length(genre_cols)) {
+    t$pred <- t$pred + 
+      ifelse(!is.na(t[[genre_user_bias_cols[i]]]) & t[[genre_movie_weight_cols[i]]] != 0,
+             t[[genre_user_bias_cols[i]]], 0)
+  }
+  
+  t$pred
+}
+
+
+rm(i, tmp_user_info, tmp_sum_user_genre_weights)
+
+
+pred <- predict(edx)
+RMSE(edx$rating, pred)
+mean(edx$rating == pred2stars(edx$timestamp, pred))
 
