@@ -919,3 +919,136 @@ pred <- predict(edx)
 RMSE(edx$rating, pred)
 mean(edx$rating == pred2stars(edx$timestamp, pred))
 
+#-------
+
+LinearLikeGenreBiasBasedModel <- function(s) {
+  model <- list()
+  
+  # Colums used to store the weights of the genres in a movie.
+  model$genre_user_weight_cols <- paste(genre_cols, 'user_weight', sep = '_')
+  # Colums used to store the weights of the genres in an user.
+  model$genre_movie_weight_cols <- paste(genre_cols, 'movie_weight', sep = '_')
+  # Colums used to store the bias per genre of an user.
+  model$genre_user_bias_cols <- paste(genre_cols, 'user_bias', sep = '_')
+  
+  # Setting the genres as one-hot columns
+  s <- set_one_hot_genres(s)
+  
+  # Grouping the dataset by user to get the weights per genre.
+  # The weight is intended to reflect the user's proportion of rated movies
+  # with a particular genre.
+  model$user_genre_weights <- s %>%
+    group_by(userId) %>%
+    summarise_at(genre_cols, funs(user_weight = mean(.)))
+  
+  # For each row in the dataset replacing the value of the genre column
+  # for the user's weight if TRUE, or 0 (zero) if FALSE.
+  # The idea is that each row contains the apportation of the customer's 
+  # preference per genre.
+  tmp_dataset <- s %>%
+    left_join(model$user_genre_weights, by = 'userId')
+  for (i in 1:length(genre_cols)) {
+    tmp_dataset[[genre_cols[i]]] <- 
+      ifelse(tmp_dataset[[genre_cols[i]]],
+             tmp_dataset[[model$genre_user_weight_cols[i]]],
+             0)
+  }
+  
+  # Grouping the dataset by movie and summing the weights of all
+  # the users that rated the movie.
+  # The intention is having the sums of the customers preferences per genre
+  # for each one of the movies.
+  model$movie_genre_weights <- tmp_dataset %>%
+    group_by(movieId) %>%
+    summarise_at(genre_cols, funs(movie_weight = sum(.)))
+  
+  # For each one of the movies, the sums of the customers preferences per genre
+  # are normalized to sum 1 (if any), these would be the genre weights per movie
+  # and they intent to represent the proportion that a movie has of a 
+  # particular genre.
+  sum_movie_genre_weights <-
+    rowSums(model$movie_genre_weights[model$genre_movie_weight_cols])
+  for (i in 1:length(genre_cols)) {
+    model$movie_genre_weights[[model$genre_movie_weight_cols[i]]] <-
+      ifelse(sum_movie_genre_weights != 0,
+             model$movie_genre_weights[[model$genre_movie_weight_cols[i]]] /
+               sum_movie_genre_weights,
+             0)
+  }
+  
+  # Average of the total of rating
+  model$mu <- mean(s$rating)
+  
+  # Getting the bias per movie
+  model$movie_info <- s %>%
+    group_by(movieId) %>%
+    summarise(movie_bias = mean(rating - model$mu)) %>%
+    left_join(model$movie_genre_weights, by = 'movieId')
+  
+  # Getting the bias per user
+  model$user_info <- s %>%
+    left_join(model$movie_info, by = 'movieId') %>%
+    group_by(userId) %>%
+    summarise(user_bias = mean(rating - movie_bias - model$mu))
+  
+  
+  tmp_user_info <- s %>%
+    left_join(model$movie_genre_weights, by = 'movieId')
+  for (i in 1:length(genre_cols)) {
+    tmp_user_info[[genre_cols[i]]] <-
+      ifelse(tmp_user_info[[genre_cols[i]]],
+             tmp_user_info[[model$genre_movie_weight_cols[i]]],
+             0)
+  }
+  sum_genre_weights <- rowSums(tmp_user_info[genre_cols])
+  for (i in 1:length(genre_cols)) {
+    tmp_user_info[[genre_cols[i]]] <-
+      ifelse(sum_genre_weights != 0,
+             tmp_user_info[[genre_cols[i]]] / sum_genre_weights,
+             0)
+  }
+  
+  model$user_info <- tmp_user_info %>%
+    left_join(model$movie_info, by = 'movieId') %>%
+    left_join(model$user_info, by = 'userId') %>%
+    group_by(userId) %>%
+    summarise_at(
+      genre_cols,
+      funs(user_bias =
+             ifelse(
+               sum(. != 0), 
+               sum((rating - model$mu - movie_bias - user_bias) * .) / sum(. != 0),
+               NA))) %>%
+    left_join(model$user_info, by = 'userId')
+  
+  model$predict <- function(t) {
+    t <- t %>%
+      left_join(model$movie_info, by = 'movieId') %>%
+      left_join(model$user_info, by = 'userId') %>%
+      mutate(pred = model$mu +
+               ifelse(!is.na(movie_bias), movie_bias, 0) +
+               ifelse(!is.na(user_bias), user_bias, 0))
+    
+    for (i in 1:length(genre_cols)) {
+      t$pred <- t$pred + 
+        ifelse(!is.na(t[[model$genre_user_bias_cols[i]]]) &
+                 t[[model$genre_movie_weight_cols[i]]] != 0,
+               t[[model$genre_user_bias_cols[i]]],
+               0)
+    }
+    
+    t$pred
+  }
+  
+  model
+}
+
+get_performance_metrics(LinearLikeGenreBiasBasedModel)
+
+#---
+model <- LinearLikeGenreBiasBasedModel(edx)
+pred <- model$predict(edx)
+RMSE(edx$rating, pred)
+mean(edx$rating == pred2stars(edx$timestamp, pred))
+
+

@@ -35,17 +35,17 @@ gives the most common rate (the mode) of the training set as prediction:
 #' @return The model
 ModeModel <- function(dataset) {
   model <- list()
-
+  
   model$ratings <- unique(dataset$rating)
   model$mode <- model$ratings[which.max(tabulate(match(dataset$rating, model$ratings)))]
-
+  
   #' The prediction function
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction for the given dataset
   model$predict <- function(s) {
     model$mode
   }
-
+  
   model
 }
 ```
@@ -291,47 +291,49 @@ the results in a dataset, which can be included as a table in this report.
 #' 1) using the whole training set to fit the model and
 #' 2) partitioning the training set before and on-or-after 
 #' the startpoint when half stars were allowed.
+#' @param training_set The dataset used to fit the models
+#' @param validation_set The dataset used as validation set
 #' @param model_generator The constructor function to generate the model
 #' @returns A dataset reporting the performance results 
-get_performance_metrics <- function(model_generator) {
+get_performance_metrics <- function(training_set, validation_set, model_generator) {
   dataset_names <- c('Training', 'Validation')
   datasets <- c()
   modes <- c()
   rmses <- c()
   accuracies <- c()
   counter <- 0
-
+  
   for (is_partitioned in c(FALSE, TRUE)) {
     # Chosing the mode PARTITIONED or WHOLE
     if (is_partitioned) {
-      model <- PartitionedModel(edx, model_generator)
+      model <- PartitionedModel(training_set, model_generator)
     } else {
-      model <- model_generator(edx)
+      model <- model_generator(training_set)
     }
-
+    
     for (dataset_name in dataset_names) {
       # Chosing the dataset to evaluate
       if (dataset_name == 'Training') {
-        ds <- edx
+        ds <- training_set
       } else {
-        ds <- validation
+        ds <- validation_set
       }
-
+      
       counter <- counter + 1
-
+      
       # Getting the prediction for the chosen dataset
       pred <- model$predict(ds)
-
+      
       datasets[counter] <- dataset_name
       modes[counter] <- ifelse(is_partitioned, 'PARTITIONED', 'WHOLE')
-
+      
       # Calculating the RMSE
       rmses[counter] <- RMSE(pred, ds$rating)
       # Calculating the accuracy
       accuracies[counter] <- mean(pred2stars(ds$timestamp, pred) == ds$rating)
     }
   }
-
+  
   data.frame('Dataset' = datasets,
              'Mode' = modes,
              'RMSE' = rmses,
@@ -354,8 +356,8 @@ the following command calculates the prediction performance
 and includes the results as a table in this report.
 
 ```{r results = 'asis'}
-knitr::kable(get_performance_metrics(ModeModel),
-             caption = "Results for the Mode based model")
+knitr::kable(get_performance_metrics(edx, validation, ModeModel),
+             caption = "Results for the mode based model")
 ```
 
 
@@ -371,49 +373,69 @@ knitr::kable(get_performance_metrics(ModeModel),
 #' @return The model
 AvgModel <- function(dataset) {
   model <- list()
-
+  
   # The average of ratings
   model$mu <- mean(dataset$rating)
-
+  
   #' The prediction function
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction
   model$predict <- function(s) {
     model$mu
   }
-
+  
   model
 }
 ```
 
 
 ```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(AvgModel),
-             caption = "Results for the Average based model")
+knitr::kable(get_performance_metrics(edx, validation, AvgModel),
+             caption = "Results for the average based model")
 ```
 
 
-## Linear Like Model
+## Linear Like Model based on movie and user effects
 
 See: <https://rafalab.github.io/dsbook/recommendation-systems.html>
 
 ```{r}
-LinearLikeBiasBasedModel <- function(s) {
+#' This object-constructor function is used to generate a model
+#' of the form:
+#'   Y_u,m = mu + b_m + b_u + E_u,m
+#'
+#' Where 'Y_u,m' is the rating given by an user 'u' to a movie 'm',
+#' 'mu' is the average of all the observed ratings,
+#' 'b_m' is the movie effect (movie bias) of a movie 'm',
+#' 'b_u' is the user effect (user bias) of an user 'u'
+#' and 'E_u,m' is the error in the prediction.
+#'
+#' @param dataset The dataset used to fit the model
+#' @return The model
+LinearLikeBiasBasedModel <- function(dataset) {
   model <- list()
 
-  model$mu <- mean(s$rating)
+  # The average of all the ratings in the dataset
+  model$mu <- mean(dataset$rating)
 
-  model$movie_info <- s %>%
+  # Getting the movie bias per movie
+  model$movie_info <- dataset %>%
     group_by(movieId) %>%
     summarise(movie_bias = mean(rating - model$mu))
 
-  model$user_info <- s %>%
+  # Getting the user bias per user
+  model$user_info <- dataset %>%
     left_join(model$movie_info, by = 'movieId') %>%
     group_by(userId) %>%
     summarise(user_bias = mean(rating - movie_bias - model$mu))
 
-  model$predict <- function(t) {
-    t %>%
+  #' The prediction function, it retrieves as prediction:
+  #'   Y_u,m = mu + b_m + b_u
+  #'
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction
+  model$predict <- function(s) {
+    s %>%
       left_join(model$movie_info, by = 'movieId') %>%
       left_join(model$user_info, by = 'userId') %>%
       mutate(pred = model$mu +
@@ -421,14 +443,14 @@ LinearLikeBiasBasedModel <- function(s) {
                ifelse(!is.na(user_bias), user_bias, 0)) %>%
       .$pred
   }
-
+  
   model
 }
 ```
 
 ```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(LinearLikeBiasBasedModel),
-             caption = "Results for the Linear Like model")
+knitr::kable(get_performance_metrics(edx, validation, LinearLikeBiasBasedModel),
+             caption = "Results for the model based on movie and user effects")
 ```
 
 
@@ -491,8 +513,8 @@ RatingNaiveBayes <- function(s) {
 ```
 
 ```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(RatingNaiveBayes),
-             caption = "Results for the Naive Bayes based model")
+knitr::kable(get_performance_metrics(edx, validation, RatingNaiveBayes),
+             caption = "Results for the naive-Bayes based model")
 ```
 
 
@@ -563,8 +585,8 @@ RF_Rec <- function(s) {
 ```
 
 ```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(RF_Rec),
-             caption = "Results for the RF based model")
+knitr::kable(get_performance_metrics(edx, validation, RF_Rec),
+             caption = "Results for the RF-Rec based model")
 ```
 
 
