@@ -2,7 +2,7 @@
 #' a as prediction the most common rating in the dataset used to fit it.
 #' @param dataset The dataset used to fit the model
 #' @return The model
-ModeModel <- function(dataset) {
+RModeModel <- function(dataset) {
   model <- list()
   
   model$ratings <- unique(dataset$rating)
@@ -19,7 +19,7 @@ ModeModel <- function(dataset) {
 }
 
 
-model <- ModeModel(edx)
+model <- RModeModel(edx)
 
 training_pred <- model$predict(edx)
 validation_pred <- model$predict(validation)
@@ -30,10 +30,14 @@ sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
         RMSE(validation_pred, validation$rating),
         mean(validation_pred == validation$rating))
 
+rm(model, training_pred, validation_pred)
+
 
 edx %>%
   ggplot() +
   geom_histogram(aes(x = rating), binwidth = 0.25)
+
+library(lubridate)
 
 set.seed(0)
 edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
@@ -44,7 +48,6 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>
 
 half_stars_startpoint <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
 
-library(lubridate)
 as_datetime(half_stars_startpoint)
 
 
@@ -72,6 +75,7 @@ edx %>%
   geom_histogram(aes(x = rating), binwidth = 0.25) +
   facet_grid(~ partition)
 
+rm(partition_names)
 
 
 #' This object-constructor function is used to generate a metamodel 
@@ -190,7 +194,7 @@ get_performance_metrics <- function(training_set, validation_set, model_generato
              'Accuracy' = accuracies)
 }
 
-get_performance_metrics(edx, validation, ModeModel)
+get_performance_metrics(edx, validation, RModeModel)
 
 
 #' This object-constructor function is used to generate a model
@@ -198,7 +202,7 @@ get_performance_metrics(edx, validation, ModeModel)
 #' given dataset used to fit the model.
 #' @param dataset The dataset used to fit the model
 #' @return The model
-AvgModel <- function(dataset) {
+RAvgModel <- function(dataset) {
   model <- list()
   
   # The average of ratings
@@ -214,7 +218,7 @@ AvgModel <- function(dataset) {
   model
 }
 
-get_performance_metrics(edx, validation, AvgModel)
+get_performance_metrics(edx, validation, RAvgModel)
 
 
 #' This object-constructor function is used to generate a model
@@ -224,12 +228,12 @@ get_performance_metrics(edx, validation, AvgModel)
 #' Where 'Y_u,m' is the rating given by an user 'u' to a movie 'm',
 #' 'mu' is the average of all the observed ratings,
 #' 'b_m' is the movie effect (movie bias) of a movie 'm',
-#' 'b_u' is the user effect (user bias) of an user 'u'
+#' 'b_u' is the user effect (user bias) of an user 'u',
 #' and 'E_u,m' is the error in the prediction.
 #'
 #' @param dataset The dataset used to fit the model
 #' @return The model
-LinearLikeBiasBasedModel <- function(dataset) {
+MovieUserEffectModel <- function(dataset) {
   model <- list()
 
   # The average of all the ratings in the dataset
@@ -249,6 +253,12 @@ LinearLikeBiasBasedModel <- function(dataset) {
   #' The prediction function, it retrieves as prediction:
   #'   Y_u,m = mu + b_m + b_u
   #'
+  #' Where 'mu' is the average of all the observed ratings during training,
+  #' 'b_m' is the movie effect (movie bias) observed during training
+  #' for a movie 'm', and
+  #' 'b_u' is the user effect (user bias) observed during training 
+  #' for an user 'u'
+  #'
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction
   model$predict <- function(s) {
@@ -264,11 +274,11 @@ LinearLikeBiasBasedModel <- function(dataset) {
   model
 }
 
-get_performance_metrics(edx, validation, LinearLikeBiasBasedModel)
+get_performance_metrics(edx, validation, MovieUserEffectModel)
 
 
 
-NaiveBayesModel <- function(s) {
+RFNaiveBayesModel <- function(s) {
   model <- list()
   
   model$ratings <- sort(unique(s$rating))

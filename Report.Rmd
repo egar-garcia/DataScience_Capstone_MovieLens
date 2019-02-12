@@ -14,26 +14,31 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Overview
 
+
 # Methodology
+
 
 To evaluate the different (machine learning) methods tested in this report, an
 object-oriented approach is used, each method is going to be represented 
 by a model which would be generated through the construction of an object.
 
+
 To generate a model, the constructor function receives a dataset (the training set) 
 which is used to fit the model an construct its object.
 The model's object includes a `predict` function used to perform a prediction
-for another dataset (which could be the set for testing, validation, production, etc.).
+for another dataset (which could be the one for testing, validation, production, etc.).
+
 
 For example, the following function creates and object to represent a model that always
 gives the most common rate (the mode) of the training set as prediction:
+
 
 ```{r}
 #' This object-constructor function is used to generate a model that returns 
 #' a as prediction the most common rating in the dataset used to fit it.
 #' @param dataset The dataset used to fit the model
 #' @return The model
-ModeModel <- function(dataset) {
+RModeModel <- function(dataset) {
   model <- list()
   
   model$ratings <- unique(dataset$rating)
@@ -54,7 +59,7 @@ ModeModel <- function(dataset) {
 Using the constructor function, an object can be created to fit the particular model:
 
 ```{r}
-model <- ModeModel(edx)
+model <- RModeModel(edx)
 ```
 
 
@@ -78,8 +83,13 @@ sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
         mean(validation_pred == validation$rating))
 ```
 
+```{r, echo=FALSE}
+rm(model, training_pred, validation_pred)
+```
+
 
 ## Analysing the data
+
 
 Let's take an initial look at how the ratings are distributed by plotting an
 histogram to account the amount of the different ratings given by the customers.
@@ -91,14 +101,22 @@ edx %>%
 ```
 
 
-It can be observed that ratings can be interpreted as the number of starts from 1 to 5
-that users give to a movie, however it can be seen that ratings ending with a half 
-are used, at first impression looks like half start ratings are not very popular
-among users.
+It can be observed that ratings can be interpreted as the number of starts
+from 1 to 5 that users give to a movie, however it can be seen that
+ratings ending with a half are used, at first impression looks like
+half start ratings are not very popular among users.
 
 
 Let's visualize the data from another point of view, this time plotting
-the ratings against the timestamp. For exploratory purposes lets just plot
+the ratings against the timestamp, we can use `lubridate` to transform
+the timestamps to more friendly format.
+
+```{r}
+library(lubridate)
+```
+
+
+For exploratory purposes lets just plot
 using a small subset of the dataset, since using the whole one might take a lot of
 time and resources.
 
@@ -118,6 +136,10 @@ Now something interesting can be observed, it looks like ratings ending in half-
 were allowed after certain point in time, and before that time just full-stars were
 allowed.
 
+
+## Identifying the point in time to partition the data
+
+
 To find the point in time were ratings ending in half star started to appear,
 the following code can be used. In basically gets the minimum timestamp in the dataset
 where a rating with half star is found.
@@ -131,7 +153,6 @@ Converting `half_stars_startpoint` to a more redable representation using the fo
 code:
 
 ```{r}
-library(lubridate)
 as_datetime(half_stars_startpoint)
 ```
 
@@ -179,6 +200,10 @@ edx %>%
   facet_grid(~ partition)
 ```
 
+```{r, echo=FALSE}
+rm(partition_names)
+```
+
 
 Now the distribution of ratings looks very different, it seems that ratings using 
 half-stars were also popular among users when they were allowed (i.e. in the second
@@ -195,6 +220,7 @@ were allowed.
 
 
 ## Refining the metodology to use partitioned models
+
 
 Given the previous observation that the dataset can be significantly different
 in two partitions (before `r as_datetime(half_stars_startpoint)` and on-or-after that),
@@ -344,6 +370,7 @@ get_performance_metrics <- function(training_set, validation_set, model_generato
 
 ## Putting all together
 
+
 To get the performance of a specific (machine learning) method,
 the command `get_performance_metrics(model_generator)`
 would be used, where `model_generator` is the constructor function of the 
@@ -356,14 +383,28 @@ the following command calculates the prediction performance
 and includes the results as a table in this report.
 
 ```{r results = 'asis'}
-knitr::kable(get_performance_metrics(edx, validation, ModeModel),
-             caption = "Results for the mode based model")
+knitr::kable(get_performance_metrics(edx, validation, RModeModel),
+             caption = "Results for the model based on the rating mode")
 ```
 
 
 # Methods
 
-## Simple Average
+
+## Rating Average Model
+
+Let's start warming up to try different machine learning models, by first
+experimenting with a simple model that always return the average of the ratings 
+observed in the training set as prediction.
+
+This model is described by the following equation:
+$$
+Y_{u,m} = \mu + \varepsilon_{u,m}
+$$
+Where $Y_{u,m}$ is the rating given by the user $u$ to the movie $m$, $\mu$ is the average of the observed ratings, and $\varepsilon_{u,m}$ is the independent error (variability) of the prediction of the rating for the user $u$ to the movie $m$.
+
+
+The following function creates the object to represent this model:
 
 ```{r}
 #' This object-constructor function is used to generate a model
@@ -371,7 +412,7 @@ knitr::kable(get_performance_metrics(edx, validation, ModeModel),
 #' given dataset used to fit the model.
 #' @param dataset The dataset used to fit the model
 #' @return The model
-AvgModel <- function(dataset) {
+RAvgModel <- function(dataset) {
   model <- list()
   
   # The average of ratings
@@ -389,8 +430,10 @@ AvgModel <- function(dataset) {
 ```
 
 
+And the following table displays the performance result for the model:
+
 ```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(edx, validation, AvgModel),
+knitr::kable(get_performance_metrics(edx, validation, RAvgModel),
              caption = "Results for the average based model")
 ```
 
@@ -407,12 +450,12 @@ See: <https://rafalab.github.io/dsbook/recommendation-systems.html>
 #' Where 'Y_u,m' is the rating given by an user 'u' to a movie 'm',
 #' 'mu' is the average of all the observed ratings,
 #' 'b_m' is the movie effect (movie bias) of a movie 'm',
-#' 'b_u' is the user effect (user bias) of an user 'u'
+#' 'b_u' is the user effect (user bias) of an user 'u',
 #' and 'E_u,m' is the error in the prediction.
 #'
 #' @param dataset The dataset used to fit the model
 #' @return The model
-LinearLikeBiasBasedModel <- function(dataset) {
+MovieUserEffectModel <- function(dataset) {
   model <- list()
 
   # The average of all the ratings in the dataset
@@ -432,6 +475,12 @@ LinearLikeBiasBasedModel <- function(dataset) {
   #' The prediction function, it retrieves as prediction:
   #'   Y_u,m = mu + b_m + b_u
   #'
+  #' Where 'mu' is the average of all the observed ratings during training,
+  #' 'b_m' is the movie effect (movie bias) observed during training
+  #' for a movie 'm', and
+  #' 'b_u' is the user effect (user bias) observed during training 
+  #' for an user 'u'
+  #'
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction
   model$predict <- function(s) {
@@ -449,145 +498,17 @@ LinearLikeBiasBasedModel <- function(dataset) {
 ```
 
 ```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(edx, validation, LinearLikeBiasBasedModel),
+knitr::kable(get_performance_metrics(edx, validation, MovieUserEffectModel),
              caption = "Results for the model based on movie and user effects")
 ```
 
 
 ## Naive Bayes Model
 
-```{r}
-RatingNaiveBayes <- function(s) {
-  model <- list()
-  
-  model$ratings <- sort(unique(s$rating))
-  
-  model$rating_movie_cols <- paste('rating_movie', model$ratings, sep = '_')
-  model$rating_user_cols <- paste('rating_user', model$ratings, sep = '_')
-  
-  model$movie_info <- s %>%
-    group_by(movieId, rating) %>%
-    summarise(freq = n()) %>%
-    spread(rating, freq, sep = '_movie_', fill = 0) %>%
-    left_join(s %>% group_by(movieId) %>% summarise(num_ratings = n()),
-              by = 'movieId') %>%
-    group_by(movieId) %>%
-    summarise_at(model$rating_movie_cols, funs(sum(.) / num_ratings))
-  
-  model$user_info <- s %>%
-    group_by(userId, rating) %>%
-    summarise(freq = n()) %>%
-    spread(rating, freq, sep = '_user_', fill = 0) %>%
-    left_join(s %>% group_by(userId) %>% summarise(num_ratings = n()),
-              by = 'userId') %>%
-    group_by(userId) %>%
-    summarise_at(model$rating_user_cols, funs(sum(.) / num_ratings))
-  
-  model$predict <- function(t) {
-    pred_dataset <- t %>%
-      left_join(model$movie_info, by = 'movieId') %>%
-      left_join(model$user_info, by = 'userId')
-
-    pred_dataset[is.na(pred_dataset)] <- 1.0 / length(model$ratings)
-    
-    max_prod <- NULL
-    selected_rating <- NULL
-    for (i in 1:length(model$ratings)) {
-      prod <- pred_dataset[[model$rating_movie_cols[i]]] *
-        pred_dataset[[model$rating_user_cols[i]]]
-      
-      if (i <= 1) {
-        selected_rating <- rep(model$ratings[i], nrow(t))
-        max_prod <- prod
-      } else {
-        selected_rating <- ifelse(prod >= max_prod, model$ratings[i], selected_rating)
-        max_prod <- ifelse(prod >= max_prod, prod, max_prod)
-      }
-    }
-    
-    selected_rating
-  }
-  
-  model
-}
-```
-
-```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(edx, validation, RatingNaiveBayes),
-             caption = "Results for the naive-Bayes based model")
-```
-
 
 ## RF-Rec Model
 
 <https://www.researchgate.net/publication/224262836_RF-Rec_Fast_and_Accurate_Computation_of_Recommendations_Based_on_Rating_Frequencies>
-
-```{r}
-RF_Rec <- function(s) {
-  model <- list()
-
-  model$mu <- mean(s$rating)
-
-  model$ratings <- sort(unique(s$rating))
-
-  model$rating_movie_cols <- paste('rating_movie', model$ratings, sep = '_')
-  model$rating_user_cols <- paste('rating_user', model$ratings, sep = '_')
-
-  model$movie_info <- s %>%
-    group_by(movieId, rating) %>%
-    summarise(freq = n()) %>%
-    spread(rating, freq, sep = '_movie_', fill = 0) %>%
-    group_by(movieId) %>%
-    summarise_at(model$rating_movie_cols, funs(sum(.))) %>%
-    left_join(s %>% group_by(movieId) %>% summarise(movie_avg = mean(rating)),
-              by = 'movieId')
-
-  model$user_info <- s %>%
-    group_by(userId, rating) %>%
-    summarise(freq = n()) %>%
-    spread(rating, freq, sep = '_user_', fill = 0) %>%
-    group_by(userId) %>%
-    summarise_at(model$rating_user_cols, funs(sum(.))) %>%
-    left_join(s %>% group_by(userId) %>% summarise(user_avg = mean(rating)),
-              by = 'userId')
-
-  model$predict <- function(t) {
-    pred_dataset <- t %>%
-      left_join(model$movie_info, by = 'movieId') %>%
-      left_join(model$user_info, by = 'userId')
-
-    pred_dataset$movie_avg[is.na(pred_dataset$movie_avg)] <- model$mu
-    pred_dataset$user_avg[is.na(pred_dataset$user_avg)] <- model$mu
-    pred_dataset[is.na(pred_dataset)] <- 0
-
-    max_prod <- NULL
-    selected_rating <- NULL
-    for (i in 1:length(model$ratings)) {
-      prod <- (pred_dataset[[model$rating_movie_cols[i]]] + 1 +
-               ifelse(round(pred_dataset$movie_avg) == model$ratings[i], 1, 0)) *
-              (pred_dataset[[model$rating_user_cols[i]]] + 1 +
-               ifelse(round(pred_dataset$user_avg) == model$ratings[i], 1, 0))
-
-      if (i <= 1) {
-        selected_rating <- rep(model$ratings[i], nrow(t))
-        max_prod <- prod
-      } else {
-        selected_rating <- ifelse(prod > max_prod, model$ratings[i], selected_rating)
-        max_prod <- ifelse(prod > max_prod, prod, max_prod)
-      }
-    }
-
-    selected_rating
-  }
-
-  model
-}
-```
-
-```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(edx, validation, RF_Rec),
-             caption = "Results for the RF-Rec based model")
-```
 
 
 ## Matrix Factorization
