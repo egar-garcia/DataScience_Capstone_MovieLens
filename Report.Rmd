@@ -1,10 +1,9 @@
 ---
 title: "Report"
 author: "Egar Garcia"
-date: "1/22/2019"
+date: "2/11/2019"
 output:
   pdf_document: default
-  html_document: default
 ---
 
 ```{r, include=FALSE}
@@ -31,8 +30,6 @@ for another dataset (which could be the one for testing, validation, production,
 
 For example, the following function creates and object to represent a model that always
 gives the most common rate (the mode) of the training set as prediction:
-
-
 ```{r}
 #' This object-constructor function is used to generate a model that returns 
 #' a as prediction the most common rating in the dataset used to fit it.
@@ -56,8 +53,8 @@ RModeModel <- function(dataset) {
 ```
 
 
-Using the constructor function, an object can be created to fit the particular model:
-
+Using the constructor function, an object can be created to fit the particular model,
+p.e:
 ```{r}
 model <- RModeModel(edx)
 ```
@@ -65,7 +62,6 @@ model <- RModeModel(edx)
 
 Then this model can be used to make predictions, p.e. the following code makes
 predictions using the training and the validation sets:
-
 ```{r}
 training_pred <- model$predict(edx)
 validation_pred <- model$predict(validation)
@@ -73,8 +69,7 @@ validation_pred <- model$predict(validation)
 
 
 And the predictions are helpful to messure the performance of the model in terms of
-RMSE and/or accuracy, applied to the training and validation sets:
-
+RMSE and/or accuracy, applied to the training and validation sets, p.e:
 ```{r}
 sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
         RMSE(training_pred, edx$rating),
@@ -82,6 +77,7 @@ sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
         RMSE(validation_pred, validation$rating),
         mean(validation_pred == validation$rating))
 ```
+
 
 ```{r, echo=FALSE}
 rm(model, training_pred, validation_pred)
@@ -91,9 +87,8 @@ rm(model, training_pred, validation_pred)
 ## Analysing the data
 
 
-Let's take an initial look at how the ratings are distributed by plotting an
-histogram to account the amount of the different ratings given by the customers.
-
+Let's take an initial look at how the ratings are distributed, by plotting an
+histogram to account the amount of the different ratings given by the customers:
 ```{r}
 edx %>%
   ggplot() +
@@ -109,8 +104,7 @@ half start ratings are not very popular among users.
 
 Let's visualize the data from another point of view, this time plotting
 the ratings against the timestamp, we can use `lubridate` to transform
-the timestamps to more friendly format.
-
+the timestamps to a more friendly format.
 ```{r}
 library(lubridate)
 ```
@@ -118,12 +112,10 @@ library(lubridate)
 
 For exploratory purposes lets just plot
 using a small subset of the dataset, since using the whole one might take a lot of
-time and resources.
-
+time and resources:
 ```{r, echo=FALSE}
 set.seed(0)
 ```
-
 ```{r}
 edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
   ggplot(aes(x = as_datetime(timestamp), y = rating)) +
@@ -141,32 +133,28 @@ allowed.
 
 
 To find the point in time were ratings ending in half star started to appear,
-the following code can be used. In basically gets the minimum timestamp in the dataset
-where a rating with half star is found.
-
+the following code can be used.
+It basically gets the minimum timestamp in the dataset where a rating with 
+half star is found:
 ```{r}
 half_stars_startpoint <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
 ```
 
 
-Converting `half_stars_startpoint` to a more redable representation using the following
-code:
-
-```{r}
+Converting `half_stars_startpoint` to a more redable representation using
+the following code,
+it can be seen that the point in time when half-star ratings started to appear
+was on **`r as_datetime(half_stars_startpoint)`**.:
+```{r eval=FALSE}
 as_datetime(half_stars_startpoint)
 ```
 
-It can be seen that the point in time when half-star ratings started to appear
-was on `r as_datetime(half_stars_startpoint)`.
-
 
 Again, let's plot the ratings against the timestamp, but this time adding a
-vertical line indicating the point in time where half-star ratings were allowed.
-
+vertical line indicating the point in time where half-star ratings were allowed:
 ```{r, echo=FALSE}
 set.seed(0)
 ```
-
 ```{r}
 edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
   ggplot(aes(x = as_datetime(timestamp), y = rating)) +
@@ -184,9 +172,10 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>
 A clear partition of the dataset can be observed, the first one for ratings before 
 `r as_datetime(half_stars_startpoint)` where only full-stars were allowed, 
 and a second one for ratings after that point in time where half-stars were allowed.
-Let's create another plot about the distribution of ratings in each one of these
-partitions.
 
+
+Let's create another plot about the distribution of ratings in each one of these
+partitions:
 ```{r}
 partition_names = c(paste('before', as_datetime(half_stars_startpoint)),
                     paste('on or after', as_datetime(half_stars_startpoint)))
@@ -199,6 +188,7 @@ edx %>%
   geom_histogram(aes(x = rating), binwidth = 0.25) +
   facet_grid(~ partition)
 ```
+
 
 ```{r, echo=FALSE}
 rm(partition_names)
@@ -229,9 +219,7 @@ partitions and then merging the prediction results for the whole set.
 The following function creates an object in charge of doing that,
 for a given method it fits a model for each one of the partitions,
 and it has a prediction function that merges the predictions 
-for the first and second models according to the timestamp.
-
-
+for the first and second models according to the timestamp:
 ```{r}
 #' This object-constructor function is used to generate a metamodel 
 #' that contains two models,
@@ -284,7 +272,6 @@ That means that according to the timestamp, before the
 half-star starpoint only values in $\{1, 2, 3, 4, 5\}$ are allowed,
 and on or after the startpoint values in $\{1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5\}$ 
 are allowed. The folowing function performs such rounding:
-
 ```{r}
 #' Converts a prediction (which is a floating point number) to a one used to 
 #' represent ratings given by stars,
@@ -308,8 +295,7 @@ To test a particular method if would be very helpful to have a function
 that fits the respective model to either to the whole training set or the partitions
 given by the half-star startpoint, and then meassures the prediction performance against
 the training and validation sets. The following function does exaclty that and returns
-the results in a dataset, which can be included as a table in this report.
-
+the results in a dataset, which can be included as a table in this report:
 ```{r}
 #' This function is used to report the performance of a model in terms of
 #' RMSE and Accuracy for the training and validation sets.
@@ -372,16 +358,17 @@ get_performance_metrics <- function(training_set, validation_set, model_generato
 
 
 To get the performance of a specific (machine learning) method,
-the command `get_performance_metrics(model_generator)`
-would be used, where `model_generator` is the constructor function of the 
-respective model.
+the following command is useful, 
+where `model_generator` is the constructor function of the respective model:
+```{r eval=FALSE}
+get_performance_metrics(model_generator)
+```
 
 
 For example, to get the performance of the previosly defined model that 
 always predict the most common rating of the training set,
 the following command calculates the prediction performance
-and includes the results as a table in this report.
-
+and includes the results as a table in this report:
 ```{r results = 'asis'}
 knitr::kable(get_performance_metrics(edx, validation, RModeModel),
              caption = "Results for the model based on the rating mode")
@@ -391,21 +378,34 @@ knitr::kable(get_performance_metrics(edx, validation, RModeModel),
 # Methods
 
 
-## Rating Average Model
+## Model based on the average of ratings
 
-Let's start warming up to try different machine learning models, by first
-experimenting with a simple model that always return the average of the ratings 
-observed in the training set as prediction.
+
+Let's start experimenting with different models by first taking a simple model
+that always returns as prediction the average of the ratings observed 
+in the training set.
+
 
 This model is described by the following equation:
 $$
 Y_{u,m} = \mu + \varepsilon_{u,m}
 $$
-Where $Y_{u,m}$ is the rating given by the user $u$ to the movie $m$, $\mu$ is the average of the observed ratings, and $\varepsilon_{u,m}$ is the independent error (variability) of the prediction of the rating for the user $u$ to the movie $m$.
+Where:
+
+* $Y_{u,m}$ is the rating given by the user $u$ to the movie $m$
+* $\mu$ is the average of the observed ratings
+* $\varepsilon_{u,m}$ is the independent error (variability) of
+the prediction of the rating for the user $u$ to the movie $m$
 
 
-The following function creates the object to represent this model:
+The prediction of the rating that an user gives to a movie is just the value of 
+$mu$, which is described by the formula:
+$$
+\hat{Y}_{u,m} = \mu
+$$
 
+
+The following constructor function creates objects that represent this model:
 ```{r}
 #' This object-constructor function is used to generate a model
 #' that always returns as prediction the average of the rating in the
@@ -430,18 +430,73 @@ RAvgModel <- function(dataset) {
 ```
 
 
-And the following table displays the performance result for the model:
-
+The performance for this model is displayed in the following table.
+It can be observed that the performance in terms of RMSE was improved in
+comparison to the mode model, but the accuracy went worse,
+either way the performance is still bellow the one desired in this project.
 ```{r results = 'asis', echo=FALSE}
 knitr::kable(get_performance_metrics(edx, validation, RAvgModel),
              caption = "Results for the average based model")
 ```
 
 
-## Linear Like Model based on movie and user effects
+## Model based on movie and user effects
 
-See: <https://rafalab.github.io/dsbook/recommendation-systems.html>
 
+This model is based on the one described in
+<https://rafalab.github.io/dsbook/recommendation-systems.html>
+which was motivated by some of the approaches taken by the winners of 
+the Netflix challenges on October 2006.
+
+
+It would be the equivalent of a linear model with the movie and user as 
+independent variables and the rating as the dependent variable, which
+could be potrentially fit by the following code:
+```{r eval=FALSE}
+lm(rating ~ as.factor(movieId) + as.factor(userId))
+```
+
+
+However running the previous code would take a lot of time and resources, 
+then instead an approximation is done where
+the effects per user and movie are calculated. 
+
+
+This model is described by the following equation:
+$$
+Y_{u,m} = \mu + b_{m} + b_{u} + \varepsilon_{u,m}
+$$
+Where:
+
+* $Y_{u,m}$ is the rating given by the user $u$ to the movie $m$
+* $\mu$ is the average of the observed ratings
+* $b_{m}$ is the observed effect for a particular movie $m$ (movie bias)
+* $b_{u}$ is the observed effect for a particular user $u$ (user bias)
+* $\varepsilon_{u,m}$ is the independent error (variability) 
+of the prediction of the rating for the user $u$ to the movie $m$
+
+
+The movie effect $b_{m}$ of a movie $m$ is the average of $Y_{u,m} - \mu$
+for all the users $u$ that rated the movie.
+It would be expected that good movies have a positive effect (bias), while
+bad movies have a negative effect (bias).
+
+
+The user effect $b_{u}$ of an user $u$ is the average of $Y_{u,m} - \mu - b_{m}$
+for all the movies $m$ that the user rated.
+It would be expected that optimistic users (that can rate well a really bad movie)
+have a positive effect (bias), while cranky users (that can reate bad a great movei)
+have a negative effect (bias).
+
+
+The prediction of the rating that an user gives to a movie is the value
+described by the formula:
+$$
+\hat{Y}_{u,m} = \mu + b_{m} + b_{u}
+$$
+
+
+The following constructor function creates an object for representing this model:
 ```{r}
 #' This object-constructor function is used to generate a model
 #' of the form:
@@ -476,10 +531,8 @@ MovieUserEffectModel <- function(dataset) {
   #'   Y_u,m = mu + b_m + b_u
   #'
   #' Where 'mu' is the average of all the observed ratings during training,
-  #' 'b_m' is the movie effect (movie bias) observed during training
-  #' for a movie 'm', and
-  #' 'b_u' is the user effect (user bias) observed during training 
-  #' for an user 'u'
+  #' 'b_m' is the movie effect (movie bias) observed during training for a movie 'm',
+  #' and 'b_u' is the user effect (user bias) observed during training  for an user 'u'
   #'
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction
@@ -497,6 +550,12 @@ MovieUserEffectModel <- function(dataset) {
 }
 ```
 
+
+The performance for this model is displayed in the following table.
+It can be observed that the performance in terms of RMSE and accuracy
+was improved in comparison to the previous models.
+In fact, the values obtained in the RMSEs applied to the validation set
+are enought to reach the objective of this project.
 ```{r results = 'asis', echo=FALSE}
 knitr::kable(get_performance_metrics(edx, validation, MovieUserEffectModel),
              caption = "Results for the model based on movie and user effects")

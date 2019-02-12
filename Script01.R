@@ -254,10 +254,8 @@ MovieUserEffectModel <- function(dataset) {
   #'   Y_u,m = mu + b_m + b_u
   #'
   #' Where 'mu' is the average of all the observed ratings during training,
-  #' 'b_m' is the movie effect (movie bias) observed during training
-  #' for a movie 'm', and
-  #' 'b_u' is the user effect (user bias) observed during training 
-  #' for an user 'u'
+  #' 'b_m' is the movie effect (movie bias) observed during training for a movie 'm',
+  #' and b_u' is the user effect (user bias) observed during training for an user 'u'
   #'
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction
