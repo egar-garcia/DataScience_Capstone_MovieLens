@@ -223,9 +223,9 @@ get_performance_metrics(edx, validation, RAvgModel)
 
 #' This object-constructor function is used to generate a model
 #' of the form:
-#'   Y_u,m = mu + b_m + b_u + E_u,m
+#'   r_u,m = mu + b_m + b_u + E_u,m
 #'
-#' Where 'Y_u,m' is the rating given by an user 'u' to a movie 'm',
+#' Where 'r_u,m' is the rating given by an user 'u' to a movie 'm',
 #' 'mu' is the average of all the observed ratings,
 #' 'b_m' is the movie effect (movie bias) of a movie 'm',
 #' 'b_u' is the user effect (user bias) of an user 'u',
@@ -251,7 +251,7 @@ MovieUserEffectModel <- function(dataset) {
     summarise(user_bias = mean(rating - movie_bias - model$mu))
 
   #' The prediction function, it retrieves as prediction:
-  #'   Y_u,m = mu + b_m + b_u
+  #'   mu + b_m + b_u
   #'
   #' Where 'mu' is the average of all the observed ratings during training,
   #' 'b_m' is the movie effect (movie bias) observed during training for a movie 'm',
@@ -275,48 +275,84 @@ MovieUserEffectModel <- function(dataset) {
 get_performance_metrics(edx, validation, MovieUserEffectModel)
 
 
-
-RFNaiveBayesModel <- function(s) {
+#' This object-constructor function is used to generate a model
+#' to estimate the probability that an user gives a rating 'r',
+#' and the probability that a movie is given a rating 'r',
+#' for each one of the existing ratings.
+#' Then using those probabilities to estimate the prediction of the
+#' rating that an user gives to a movie, by getting the rating which maximizes
+#' the product of those probabilities.
+#'
+#' @param dataset The dataset used to fit the model
+#' @return The model
+RFNaiveBayesModel <- function(dataset) {
   model <- list()
-  
-  model$ratings <- sort(unique(s$rating))
-  
+
+  # Getting the set of all the existing ratings
+  model$ratings <- sort(unique(dataset$rating))
+
+  # Names of the columns to be used to store the probabilities that
+  # an user gives a specific rating, there would be as many columns as
+  # existing ratings
   model$rating_movie_cols <- paste('rating_movie', model$ratings, sep = '_')
+
+  # Names of the columns to be used to store the probabilities that
+  # a movie is given a specific rating, there would be as many columns as
+  # existing ratings
   model$rating_user_cols <- paste('rating_user', model$ratings, sep = '_')
-  
-  model$movie_info <- s %>%
+
+  # Information of the movies, including the probability for each movie
+  # to be given each one of the existing ratings
+  model$movie_info <- dataset %>%
     group_by(movieId, rating) %>%
     summarise(freq = n()) %>%
     spread(rating, freq, sep = '_movie_', fill = 0) %>%
-    left_join(s %>% group_by(movieId) %>% summarise(num_ratings = n()),
+    left_join(dataset %>% group_by(movieId) %>% summarise(num_ratings = n()),
               by = 'movieId') %>%
     group_by(movieId) %>%
     summarise_at(model$rating_movie_cols, funs(sum(.) / num_ratings))
-  
-  model$user_info <- s %>%
+
+  # Information of the user, including the probability for each user
+  # to give each one of the existing ratings
+  model$user_info <- dataset %>%
     group_by(userId, rating) %>%
     summarise(freq = n()) %>%
     spread(rating, freq, sep = '_user_', fill = 0) %>%
-    left_join(s %>% group_by(userId) %>% summarise(num_ratings = n()),
+    left_join(dataset %>% group_by(userId) %>% summarise(num_ratings = n()),
               by = 'userId') %>%
     group_by(userId) %>%
     summarise_at(model$rating_user_cols, funs(sum(.) / num_ratings))
-  
-  model$predict <- function(t) {
-    pred_dataset <- t %>%
+
+  #' The prediction function, it retrieves as prediction the rating 'r'
+  #' that gives the maximun of the products: 
+  #'    p(r|u) * p(r|m)
+  #'
+  #' Where 'p(r|u)' is the probability that the user 'u' gives a rating 'r',
+  #' and 'p(r|m)' is the probability that the movie 'm' is rated as 'r'
+  #'
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction
+  model$predict <- function(s) {
+    # Adding p(r|u) and p(r|m) for each rating in each row of the set
+    pred_dataset <- s %>%
       left_join(model$movie_info, by = 'movieId') %>%
       left_join(model$user_info, by = 'userId')
 
+    # For missing estimates probabilities the same probability for
+    # each rating is assumed
     pred_dataset[is.na(pred_dataset)] <- 1.0 / length(model$ratings)
-    
+
+    # Calculating the maximum of the products p(r|u) * p(r|m)
+    # in each row of the dataset
     max_prod <- NULL
     selected_rating <- NULL
     for (i in 1:length(model$ratings)) {
-      prod <- pred_dataset[[model$rating_movie_cols[i]]] *
+      prod <-
+        pred_dataset[[model$rating_movie_cols[i]]] *
         pred_dataset[[model$rating_user_cols[i]]]
       
       if (i <= 1) {
-        selected_rating <- rep(model$ratings[i], nrow(t))
+        selected_rating <- rep(model$ratings[i], nrow(s))
         max_prod <- prod
       } else {
         selected_rating <- ifelse(prod >= max_prod, model$ratings[i], selected_rating)
@@ -330,57 +366,93 @@ RFNaiveBayesModel <- function(s) {
   model
 }
 
-get_performance_metrics(NaiveBayesModel)
+get_performance_metrics(edx, validation, NaiveBayesModel)
 
 
-
-RFRecModel <- function(s) {
+#' This object-constructor function is used to generate a model
+#' based in RF-Rec schema.
+#'
+#' @param dataset The dataset used to fit the model
+#' @return The model
+RFRecModel <- function(dataset) {
   model <- list()
 
-  model$mu <- mean(s$rating)
+  # Average of all the observed ratings in the dataset
+  model$mu <- mean(dataset$rating)
 
-  model$ratings <- sort(unique(s$rating))
+  # Getting the set of all the existing ratings
+  model$ratings <- sort(unique(dataset$rating))
 
+  # Names of the columns to be used to store the frequencies of the ratings
+  # that an user gives, there would be as many columns as existing ratings
   model$rating_movie_cols <- paste('rating_movie', model$ratings, sep = '_')
+  # Names of the columns to be used to store the frequencies of the ratings
+  # that a movie is given, there would be as many columns as existing ratings
   model$rating_user_cols <- paste('rating_user', model$ratings, sep = '_')
 
-  model$movie_info <- s %>%
+  # Information of the movies, including the frequency of the received ratings
+  # for each rating
+  model$movie_info <- dataset %>%
     group_by(movieId, rating) %>%
     summarise(freq = n()) %>%
     spread(rating, freq, sep = '_movie_', fill = 0) %>%
     group_by(movieId) %>%
     summarise_at(model$rating_movie_cols, funs(sum(.))) %>%
-    left_join(s %>% group_by(movieId) %>% summarise(movie_avg = mean(rating)),
+    left_join(dataset %>% group_by(movieId) %>% summarise(movie_avg = mean(rating)),
               by = 'movieId')
 
-  model$user_info <- s %>%
+  # Information of the user, including the frequency of the given ratings
+  # for each rating
+  model$user_info <- dataset %>%
     group_by(userId, rating) %>%
     summarise(freq = n()) %>%
     spread(rating, freq, sep = '_user_', fill = 0) %>%
     group_by(userId) %>%
     summarise_at(model$rating_user_cols, funs(sum(.))) %>%
-    left_join(s %>% group_by(userId) %>% summarise(user_avg = mean(rating)),
+    left_join(dataset %>% group_by(userId) %>% summarise(user_avg = mean(rating)),
               by = 'userId')
 
-  model$predict <- function(t) {
-    pred_dataset <- t %>%
+  #' The prediction function, it retrieves as prediction the rating 'r'
+  #' that gives the maximun of the products: 
+  #'    (freq_user(u, r) + 1 + 1_user(u,r)) * (freq_movie(m, r) + 1 + 1_movie(m,r))
+  #'
+  #' Where 'freq_user(u, r)' is the frequency of the rating 'r' given for the user 'u',
+  #' 'freq_movie(m, r)' is the frequency of the rating 'r' given to the movie 'm',
+  #' '1_user(u,r)' is 1 if 'r' corresponds to the given average 
+  #' (rounded to the closest existing rating) of the user 'u', or 0 otherwise,
+  #' '1_movie(m,r)' is 1 if 'r' corresponds to the given average
+  #' (rounded to the closest existing rating) of the movie 'm', or 0 otherwise
+  #'
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction
+  model$predict <- function(s) {
+    pred_dataset <- s %>%
       left_join(model$movie_info, by = 'movieId') %>%
       left_join(model$user_info, by = 'userId')
 
+    # In case of missing user or movie averages, using the global average
     pred_dataset$movie_avg[is.na(pred_dataset$movie_avg)] <- model$mu
     pred_dataset$user_avg[is.na(pred_dataset$user_avg)] <- model$mu
+    # In case of missing frequencies using 0
     pred_dataset[is.na(pred_dataset)] <- 0
 
+    # Getting the maximum 'r' which maximizes the product
+    # (freq_user(u, r) + 1 + 1_user(u,r)) * (freq_movie(m, r) + 1 + 1_movie(m,r))
+    # per row in the dataset
     max_prod <- NULL
     selected_rating <- NULL
     for (i in 1:length(model$ratings)) {
+      # Calculating the product
+      # (freq_user(u, r) + 1 + 1_user(u,r)) * (freq_movie(m, r) + 1 + 1_movie(m,r))
       prod <- (pred_dataset[[model$rating_movie_cols[i]]] + 1 +
-               ifelse(round(pred_dataset$movie_avg) == model$ratings[i], 1, 0)) *
+               ifelse(pred2stars(s$timestamp, pred_dataset$movie_avg) == model$ratings[i],
+                      1, 0)) *   
               (pred_dataset[[model$rating_user_cols[i]]] + 1 +
-               ifelse(round(pred_dataset$user_avg) == model$ratings[i], 1, 0))
+               ifelse(pred2stars(s$timestamp, pred_dataset$user_avg) == model$ratings[i],
+                      1, 0))
 
       if (i <= 1) {
-        selected_rating <- rep(model$ratings[i], nrow(t))
+        selected_rating <- rep(model$ratings[i], nrow(s))
         max_prod <- prod
       } else {
         selected_rating <- ifelse(prod > max_prod, model$ratings[i], selected_rating)
@@ -394,7 +466,7 @@ RFRecModel <- function(s) {
   model
 }
 
-get_performance_metrics(RFRecModel)
+get_performance_metrics(edx, validation, RFRecModel)
 
 
 

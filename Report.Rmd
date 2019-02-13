@@ -1,9 +1,10 @@
 ---
-title: "Report"
+title: "MovieLens Project"
 author: "Egar Garcia"
 date: "2/11/2019"
 output:
-  pdf_document: default
+  pdf_document:
+    number_sections: true
 ---
 
 ```{r, include=FALSE}
@@ -12,6 +13,19 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 # Overview
+
+
+The objective of the project considered in this report is to create a movie
+recommendation system using the MovieLens dataset 
+(actually for this project small subset of 10M is used).
+In the scope of this project by recomendation we understand the action of
+predicting the rating that a particular user gives to a particular movie. 
+
+
+As a part of this project a trininig and validation sets are given 
+(actually an R script has been given to generate them).
+The goal is to reach an RMSE of `0.87750` or less for the system's
+predictions agains the groud thuth applied to the validation set.
 
 
 # Methodology
@@ -381,18 +395,17 @@ knitr::kable(get_performance_metrics(edx, validation, RModeModel),
 ## Model based on the average of ratings
 
 
-Let's start experimenting with different models by first taking a simple model
-that always returns as prediction the average of the ratings observed 
-in the training set.
+Let's first take a simple model that always returns as prediction
+the average of the ratings observed in the training set.
 
 
 This model is described by the following equation:
 $$
-Y_{u,m} = \mu + \varepsilon_{u,m}
+r_{u,m} = \mu + \varepsilon_{u,m}
 $$
 Where:
 
-* $Y_{u,m}$ is the rating given by the user $u$ to the movie $m$
+* $r_{u,m}$ is the rating given by the user $u$ to the movie $m$
 * $\mu$ is the average of the observed ratings
 * $\varepsilon_{u,m}$ is the independent error (variability) of
 the prediction of the rating for the user $u$ to the movie $m$
@@ -401,7 +414,7 @@ the prediction of the rating for the user $u$ to the movie $m$
 The prediction of the rating that an user gives to a movie is just the value of 
 $mu$, which is described by the formula:
 $$
-\hat{Y}_{u,m} = \mu
+\hat{r}_{u,m} = \mu
 $$
 
 
@@ -464,11 +477,11 @@ the effects per user and movie are calculated.
 
 This model is described by the following equation:
 $$
-Y_{u,m} = \mu + b_{m} + b_{u} + \varepsilon_{u,m}
+r_{u,m} = \mu + b_{m} + b_{u} + \varepsilon_{u,m}
 $$
-Where:
+where:
 
-* $Y_{u,m}$ is the rating given by the user $u$ to the movie $m$
+* $r_{u,m}$ is the rating given by the user $u$ to the movie $m$
 * $\mu$ is the average of the observed ratings
 * $b_{m}$ is the observed effect for a particular movie $m$ (movie bias)
 * $b_{u}$ is the observed effect for a particular user $u$ (user bias)
@@ -476,13 +489,13 @@ Where:
 of the prediction of the rating for the user $u$ to the movie $m$
 
 
-The movie effect $b_{m}$ of a movie $m$ is the average of $Y_{u,m} - \mu$
+The movie effect $b_{m}$ of a movie $m$ is the average of $r_{u,m} - \mu$
 for all the users $u$ that rated the movie.
 It would be expected that good movies have a positive effect (bias), while
 bad movies have a negative effect (bias).
 
 
-The user effect $b_{u}$ of an user $u$ is the average of $Y_{u,m} - \mu - b_{m}$
+The user effect $b_{u}$ of an user $u$ is the average of $r_{u,m} - \mu - b_{m}$
 for all the movies $m$ that the user rated.
 It would be expected that optimistic users (that can rate well a really bad movie)
 have a positive effect (bias), while cranky users (that can reate bad a great movei)
@@ -492,7 +505,7 @@ have a negative effect (bias).
 The prediction of the rating that an user gives to a movie is the value
 described by the formula:
 $$
-\hat{Y}_{u,m} = \mu + b_{m} + b_{u}
+\hat{r}_{u,m} = \mu + b_{m} + b_{u}
 $$
 
 
@@ -500,9 +513,9 @@ The following constructor function creates an object for representing this model
 ```{r}
 #' This object-constructor function is used to generate a model
 #' of the form:
-#'   Y_u,m = mu + b_m + b_u + E_u,m
+#'   r_u,m = mu + b_m + b_u + E_u,m
 #'
-#' Where 'Y_u,m' is the rating given by an user 'u' to a movie 'm',
+#' Where 'r_u,m' is the rating given by an user 'u' to a movie 'm',
 #' 'mu' is the average of all the observed ratings,
 #' 'b_m' is the movie effect (movie bias) of a movie 'm',
 #' 'b_u' is the user effect (user bias) of an user 'u',
@@ -528,7 +541,7 @@ MovieUserEffectModel <- function(dataset) {
     summarise(user_bias = mean(rating - movie_bias - model$mu))
 
   #' The prediction function, it retrieves as prediction:
-  #'   Y_u,m = mu + b_m + b_u
+  #'   mu + b_m + b_u
   #'
   #' Where 'mu' is the average of all the observed ratings during training,
   #' 'b_m' is the movie effect (movie bias) observed during training for a movie 'm',
@@ -562,14 +575,317 @@ knitr::kable(get_performance_metrics(edx, validation, MovieUserEffectModel),
 ```
 
 
-## Naive Bayes Model
+## Model based on Naive-Bayes applied to the ratings frequency
+
+
+Models based on frequencies try to chose one of the existing ratings
+when doing the predictions, instead of calculating a numeric approximation,
+like when minimizing the difference of all the observations,
+this has the purpose of increasing the accuracy rater than minimazing the 
+global error like when using other metrics like the RMSE.
+
+
+This model uses a Naive-Bayes approach applied to the frequeancy of the
+existing ratings per user and movie.
+The base for this model is to find the probability that an user gives a 
+specific rating $r$, denoted $p_u(r)$;
+and similarly, the probability that a movie is rated as $r$, denoted $p_m(r)$.
+These probabilities can be estimated from the training set just by 
+counting the number of observations for each one of the ratings
+(the rating frequency) either per user or per customer, 
+and then dividing them by the total of observations 
+per user or per customer respectively.
+
+
+The prediction of the rating that an user gives to a movie is the value
+described by the following formula, which basically takes the rating
+which product of the probabilities for the user and movie is the maximum:
+$$
+\hat{r}_{u,m} = \mathop{\mathrm{arg\,max}}_{r \in R} \Big\{ p_u(r) \cdot p_m(r) \Big\} 
+$$
+where:
+
+* $\hat{r}_{u,m}$ is the predicted rating given by the user $u$ to the movie $m$
+* $R$ is the set of all posible ratings
+* $p_u(r)$ is the probability of the user $u$ to give a rating $r$
+* $p_m(r)$ is the probability that a movie $m$ receives a rating $r$
+
+
+The following constructor function creates an object for representing this model:
+```{r}
+#' This object-constructor function is used to generate a model
+#' to estimate the probability that an user gives a rating 'r',
+#' and the probability that a movie is given a rating 'r',
+#' for each one of the existing ratings.
+#' Then using those probabilities to estimate the prediction of the
+#' rating that an user gives to a movie, by getting the rating which maximizes
+#' the product of those probabilities.
+#'
+#' @param dataset The dataset used to fit the model
+#' @return The model
+RFNaiveBayesModel <- function(dataset) {
+  model <- list()
+
+  # Getting the set of all the existing ratings  
+  model$ratings <- sort(unique(dataset$rating))
+
+  # Names of the columns to be used to store the probabilities that
+  # an user gives a specific rating, there would be as many columns as
+  # existing ratings
+  model$rating_movie_cols <- paste('rating_movie', model$ratings, sep = '_')
+
+  # Names of the columns to be used to store the probabilities that
+  # a movie is given a specific rating, there would be as many columns as
+  # existing ratings
+  model$rating_user_cols <- paste('rating_user', model$ratings, sep = '_')
+
+  # Information of the movies, including the probability for each movie
+  # to be given each one of the existing ratings
+  model$movie_info <- dataset %>%
+    group_by(movieId, rating) %>%
+    summarise(freq = n()) %>%
+    spread(rating, freq, sep = '_movie_', fill = 0) %>%
+    left_join(dataset %>% group_by(movieId) %>% summarise(num_ratings = n()),
+              by = 'movieId') %>%
+    group_by(movieId) %>%
+    summarise_at(model$rating_movie_cols, funs(sum(.) / num_ratings))
+
+  # Information of the user, including the probability for each user
+  # to give each one of the existing ratings
+  model$user_info <- dataset %>%
+    group_by(userId, rating) %>%
+    summarise(freq = n()) %>%
+    spread(rating, freq, sep = '_user_', fill = 0) %>%
+    left_join(dataset %>% group_by(userId) %>% summarise(num_ratings = n()),
+              by = 'userId') %>%
+    group_by(userId) %>%
+    summarise_at(model$rating_user_cols, funs(sum(.) / num_ratings))
+
+  #' The prediction function, it retrieves as prediction the rating 'r'
+  #' that gives the maximun of the products: 
+  #'    p(r|u) * p(r|m)
+  #'
+  #' Where 'p(r|u)' is the probability that the user 'u' gives a rating 'r',
+  #' and 'p(r|m)' is the probability that the movie 'm' is rated as 'r'
+  #'
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction
+  model$predict <- function(s) {
+    # Adding p(r|u) and p(r|m) for each rating in each row of the set
+    pred_dataset <- s %>%
+      left_join(model$movie_info, by = 'movieId') %>%
+      left_join(model$user_info, by = 'userId')
+
+    # For missing estimates probabilities the same probability for
+    # each rating is assumed
+    pred_dataset[is.na(pred_dataset)] <- 1.0 / length(model$ratings)
+
+    # Calculating the maximum of the products p(r|u) * p(r|m)
+    # in each row of the dataset
+    max_prod <- NULL
+    selected_rating <- NULL
+    for (i in 1:length(model$ratings)) {
+      prod <-
+        pred_dataset[[model$rating_movie_cols[i]]] *
+        pred_dataset[[model$rating_user_cols[i]]]
+      
+      if (i <= 1) {
+        selected_rating <- rep(model$ratings[i], nrow(s))
+        max_prod <- prod
+      } else {
+        selected_rating <- ifelse(prod >= max_prod, model$ratings[i], selected_rating)
+        max_prod <- ifelse(prod >= max_prod, prod, max_prod)
+      }
+    }
+    
+    selected_rating
+  }
+  
+  model
+}
+```
+
+
+The performance of this model is displayed in the following table.
+It can be observed that the accuracy was increased in comparison to the previous model,
+however the RMSE presents a poorer performance which is not enought for the objective 
+of this project.
+```{r results = 'asis', echo=FALSE}
+knitr::kable(get_performance_metrics(edx, validation, RFNaiveBayesModel),
+             caption = "Results for the model based on Rating Frequency Naive-Bayes")
+```
 
 
 ## RF-Rec Model
 
-<https://www.researchgate.net/publication/224262836_RF-Rec_Fast_and_Accurate_Computation_of_Recommendations_Based_on_Rating_Frequencies>
+
+This is another model based on the frequency of the ratings aiming to improve the
+accuracy of the predictions. The model is described in this paper:
+<https://www.researchgate.net/publication/224262836_RF-Rec_Fast_and_Accurate_Computation_of_Recommendations_Based_on_Rating_Frequencies>. The idea behind this model is to model
+the tendency of user to provide extreme ratings rater than staying consistent in 
+their ratings, as modeled in the customer and user effects model.
+
+
+Lets define the following functions:
+$$
+f_{user}(u,r) = freq_{user}(u, r) + 1 + 1_{user}(u,r)
+$$
+and:
+$$
+f_{movie}(u,r) = freq_{movie}(m, r) + 1 + 1_{movie}(m,r)
+$$
+where:
+
+* $freq_{user}(u, r)$ is the frequency of the rating $r$ given for the user $u$
+* $freq_{movie}(m, r)$ is the frequency of the rating $r$ given to the movie $m$
+* $1_{user}(u,r)$ is $1$ if $r$ corresponds to the given average (rounded to the 
+closest existing rating) of the user $u$, or $0$ otherwise
+* $1_{movie}(m,r)$ is $1$ if $r$ corresponds to the given average (rounded to the 
+closest existing rating) of the movie $m$, or $0$ otherwise
+
+
+The prediction of the rating that an user gives to a movie is the value
+described by the following formula:
+$$
+\hat{r}_{u,m} =
+\mathop{\mathrm{arg\,max}}_{r \in R} \Big\{ f_{user}(u,r) \cdot f_{movie}(m,v) \Big\} 
+$$
+
+
+The following constructor function creates an object for representing this model:
+```{r}
+#' This object-constructor function is used to generate a model
+#' based in RF-Rec schema.
+#'
+#' @param dataset The dataset used to fit the model
+#' @return The model
+RFRecModel <- function(dataset) {
+  model <- list()
+
+  # Average of all the observed ratings in the dataset
+  model$mu <- mean(dataset$rating)
+
+  # Getting the set of all the existing ratings
+  model$ratings <- sort(unique(dataset$rating))
+
+  # Names of the columns to be used to store the frequencies of the ratings
+  # that an user gives, there would be as many columns as existing ratings
+  model$rating_movie_cols <- paste('rating_movie', model$ratings, sep = '_')
+  # Names of the columns to be used to store the frequencies of the ratings
+  # that a movie is given, there would be as many columns as existing ratings
+  model$rating_user_cols <- paste('rating_user', model$ratings, sep = '_')
+
+  # Information of the movies, including the frequency of the received ratings
+  # for each rating
+  model$movie_info <- dataset %>%
+    group_by(movieId, rating) %>%
+    summarise(freq = n()) %>%
+    spread(rating, freq, sep = '_movie_', fill = 0) %>%
+    group_by(movieId) %>%
+    summarise_at(model$rating_movie_cols, funs(sum(.))) %>%
+    left_join(dataset %>% group_by(movieId) %>% summarise(movie_avg = mean(rating)),
+              by = 'movieId')
+
+  # Information of the user, including the frequency of the given ratings
+  # for each rating
+  model$user_info <- dataset %>%
+    group_by(userId, rating) %>%
+    summarise(freq = n()) %>%
+    spread(rating, freq, sep = '_user_', fill = 0) %>%
+    group_by(userId) %>%
+    summarise_at(model$rating_user_cols, funs(sum(.))) %>%
+    left_join(dataset %>% group_by(userId) %>% summarise(user_avg = mean(rating)),
+              by = 'userId')
+
+  #' The prediction function, it retrieves as prediction the rating 'r'
+  #' that gives the maximun of the products: 
+  #'    (freq_user(u, r) + 1 + 1_user(u,r)) * (freq_movie(m, r) + 1 + 1_movie(m,r))
+  #'
+  #' Where 'freq_user(u, r)' is the frequency of the rating 'r' given for the user 'u',
+  #' 'freq_movie(m, r)' is the frequency of the rating 'r' given to the movie 'm',
+  #' '1_user(u,r)' is 1 if 'r' corresponds to the given average 
+  #' (rounded to the closest existing rating) of the user 'u', or 0 otherwise,
+  #' '1_movie(m,r)' is 1 if 'r' corresponds to the given average
+  #' (rounded to the closest existing rating) of the movie 'm', or 0 otherwise
+  #'
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction
+  model$predict <- function(s) {
+    pred_dataset <- s %>%
+      left_join(model$movie_info, by = 'movieId') %>%
+      left_join(model$user_info, by = 'userId')
+
+    # In case of missing user or movie averages, using the global average
+    pred_dataset$movie_avg[is.na(pred_dataset$movie_avg)] <- model$mu
+    pred_dataset$user_avg[is.na(pred_dataset$user_avg)] <- model$mu
+    # In case of missing frequencies using 0
+    pred_dataset[is.na(pred_dataset)] <- 0
+
+    # Getting the maximum 'r' which maximizes the product
+    # (freq_user(u, r) + 1 + 1_user(u,r)) * (freq_movie(m, r) + 1 + 1_movie(m,r))
+    # per row in the dataset
+    max_prod <- NULL
+    selected_rating <- NULL
+    for (i in 1:length(model$ratings)) {
+      # Calculating the product
+      # (freq_user(u, r) + 1 + 1_user(u,r)) * (freq_movie(m, r) + 1 + 1_movie(m,r))
+      prod <- (pred_dataset[[model$rating_movie_cols[i]]] + 1 +
+               ifelse(pred2stars(s$timestamp, pred_dataset$movie_avg) == model$ratings[i],
+                      1, 0)) *   
+              (pred_dataset[[model$rating_user_cols[i]]] + 1 +
+               ifelse(pred2stars(s$timestamp, pred_dataset$user_avg) == model$ratings[i],
+                      1, 0))
+
+      if (i <= 1) {
+        selected_rating <- rep(model$ratings[i], nrow(s))
+        max_prod <- prod
+      } else {
+        selected_rating <- ifelse(prod > max_prod, model$ratings[i], selected_rating)
+        max_prod <- ifelse(prod > max_prod, prod, max_prod)
+      }
+    }
+
+    selected_rating
+  }
+
+  model
+}
+```
+
+
+The performance of this model is displayed in the following table.
+It can be observed that both the RMSE and accuracy are very similar to the ones
+obtained in the Naive-Bayes approach.
+```{r results = 'asis', echo=FALSE}
+knitr::kable(get_performance_metrics(edx, validation, RFRecModel),
+             caption = "Results for the model based on RF-Rec")
+```
 
 
 ## Matrix Factorization
 
+
+Matrix factorizations methods consinst in factorizing a matrix of ratings 
+$R_{U \times M}$ (assuming that $U$ the number of users and $M$ the number of movies) as the product of two matrices of lower dimension $P_{U \times K}$ and 
+$Q_{M \times K}$. 
+
+$$
+R \approx P Q^t
+$$
+
+
+$K$ would be the number of (latent) factors,
+in this way $P$ would indicate the amount associated of each one of the factors 
+per customer, and $Q$ similarly indicates the amount of each one of the factors
+per movie.
+
+
+
 <https://cran.r-project.org/web/packages/recosystem/vignettes/introduction.html>
+
+
+# Results
+
+
+# Conclusion
+
