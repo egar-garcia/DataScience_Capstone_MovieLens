@@ -492,43 +492,61 @@ results_RFRecModel
 
 library(recosystem)
 
-MatrixFactorizationModel <- function(s) {
+#' This object-constructor function is used to generate a model
+#' of the form:
+#'   r_u,m ~ mu + b_m + b_u + sum(p_u,k * q_m_k)
+#' where:
+#'  - 'r_u,m' is the rating given by an user 'u' to a movie 'm'
+#'  - 'mu' is the average of all the observed ratings
+#'  - 'b_m' is the movie effect (movie bias) of a movie 'm'
+#'  - 'b_u' is the user effect (user bias) of an user 'u'
+#'  - 'E_u,m' is the error in the prediction.
+#'
+#' @param dataset The dataset used to fit the model
+#' @return The model
+MatrixFactorizationModel <- function(dataset) {
   model <- list()
 
-  model$mu <- mean(s$rating)
+  # The average of all the ratings in the dataset
+  model$mu <- mean(dataset$rating)
 
-  model$movie_info <- s %>%
+  # Getting the movie bias for each movie
+  model$movie_info <- dataset %>%
     group_by(movieId) %>%
     summarise(movie_bias = mean(rating - model$mu))
 
-  model$user_info <- s %>%
+  # Getting the user bias for each user
+  model$user_info <- dataset %>%
     left_join(model$movie_info, by = 'movieId') %>%
     group_by(userId) %>%
     summarise(user_bias = mean(rating - movie_bias - model$mu))
 
-  training_set <- s %>%
+  # Gettint the training set containing the residuals
+  training_set <- dataset %>%
     left_join(model$movie_info, by = 'movieId') %>%
     left_join(model$user_info, by = 'userId') %>%
     mutate(residual = rating - (model$mu + movie_bias + user_bias))
 
+  # Training set to perform the matroix factorization of the residuals
   train_data <- data_memory(user_index = training_set$userId,
                             item_index = training_set$movieId, 
                             rating = training_set$residual,
                             index1 = T)
-
+  # Training a recomender, this is the one that does the matrix factorization
+  # in this case for 30 factors
   model$recommender <- Reco()
   model$recommender$train(train_data,
                           opts = c(dim = 30, costp_l2 = 0.1, costq_l2 = 0.1, 
                                    lrate = 0.1, niter = 100, nthread = 6,
                                    verbose = F))
 
-  model$predict <- function(t) {
-    pred_data <- data_memory(user_index = t$userId, item_index = t$movieId, 
+  model$predict <- function(s) {
+    pred_data <- data_memory(user_index = s$userId, item_index = t$movieId, 
                              index1 = T)
 
     pred_residuals <- model$recommender$predict(pred_data, out_memory())
 
-    t %>%
+    s %>%
       left_join(model$movie_info, by = 'movieId') %>%
       left_join(model$user_info, by = 'userId') %>%
       mutate(pred = pred_residuals + model$mu +

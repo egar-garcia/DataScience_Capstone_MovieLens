@@ -383,8 +383,16 @@ For example, to get the performance of the previosly defined model that
 always predict the most common rating of the training set,
 the following command calculates the prediction performance
 and includes the results as a table in this report:
-```{r results = 'asis'}
+```{r eval=FALSE}
 knitr::kable(get_performance_metrics(edx, validation, RModeModel),
+             caption = "Results for the model based on the rating mode")
+```
+```{r results = 'asis', echo=FALSE}
+if (!exists('results_RModeModel')) {
+  results_RModeModel <-
+    get_performance_metrics(edx, validation, RModeModel)
+}
+knitr::kable(results_RModeModel,
              caption = "Results for the model based on the rating mode")
 ```
 
@@ -448,8 +456,12 @@ It can be observed that the performance in terms of RMSE was improved in
 comparison to the mode model, but the accuracy went worse,
 either way the performance is still bellow the one desired in this project.
 ```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(edx, validation, RAvgModel),
-             caption = "Results for the average based model")
+if (!exists('results_RAvgModel')) {
+  results_RAvgModel <-
+    get_performance_metrics(edx, validation, RAvgModel)
+}
+knitr::kable(results_RAvgModel,
+             caption = "Results for the model based on the ratings' average")
 ```
 
 
@@ -529,12 +541,12 @@ MovieUserEffectModel <- function(dataset) {
   # The average of all the ratings in the dataset
   model$mu <- mean(dataset$rating)
 
-  # Getting the movie bias per movie
+  # Getting the movie bias for each movie
   model$movie_info <- dataset %>%
     group_by(movieId) %>%
     summarise(movie_bias = mean(rating - model$mu))
 
-  # Getting the user bias per user
+  # Getting the user bias for each user
   model$user_info <- dataset %>%
     left_join(model$movie_info, by = 'movieId') %>%
     group_by(userId) %>%
@@ -570,7 +582,12 @@ was improved in comparison to the previous models.
 In fact, the values obtained in the RMSEs applied to the validation set
 are enought to reach the objective of this project.
 ```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(edx, validation, MovieUserEffectModel),
+if (!exists('results_MovieUserEffectModel')) {
+  results_MovieUserEffectModel <-
+    get_performance_metrics(edx, validation, MovieUserEffectModel)
+}
+
+knitr::kable(results_MovieUserEffectModel,
              caption = "Results for the model based on movie and user effects")
 ```
 
@@ -711,7 +728,11 @@ It can be observed that the accuracy was increased in comparison to the previous
 however the RMSE presents a poorer performance which is not enought for the objective 
 of this project.
 ```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(edx, validation, RFNaiveBayesModel),
+if (!exists('results_NaiveBayesModel')) {
+  results_NaiveBayesModel <-
+    get_performance_metrics(edx, validation, RFNaiveBayesModel)
+}
+knitr::kable(results_NaiveBayesModel,
              caption = "Results for the model based on Rating Frequency Naive-Bayes")
 ```
 
@@ -857,7 +878,11 @@ The performance of this model is displayed in the following table.
 It can be observed that both the RMSE and accuracy are very similar to the ones
 obtained in the Naive-Bayes approach.
 ```{r results = 'asis', echo=FALSE}
-knitr::kable(get_performance_metrics(edx, validation, RFRecModel),
+if (!exists('results_RFRecModel')) {
+  results_RFRecModel <-
+    get_performance_metrics(edx, validation, RFRecModel)
+}
+knitr::kable(results_RFRecModel,
              caption = "Results for the model based on RF-Rec")
 ```
 
@@ -866,22 +891,79 @@ knitr::kable(get_performance_metrics(edx, validation, RFRecModel),
 
 
 Matrix factorizations methods consinst in factorizing a matrix of ratings 
-$R_{U \times M}$ (assuming that $U$ the number of users and $M$ the number of movies) as the product of two matrices of lower dimension $P_{U \times K}$ and 
-$Q_{M \times K}$. 
+$R_{U \times M}$ (where $U$ is the number of users and $M$ the number of movies)
+as the product of two matrices of lower dimension $P_{U \times K}$ and 
+$Q_{M \times K}$ (where $K$ is a given number of factors). 
 
 $$
-R \approx P Q^t
+R = P Q^t
 $$
 
 
-$K$ would be the number of (latent) factors,
-in this way $P$ would indicate the amount associated of each one of the factors 
-per customer, and $Q$ similarly indicates the amount of each one of the factors
-per movie.
+Matrix factorization methods consist in finding an approximation to such $P$ and $Q$
+matrices, given a number of factors $K$. From this perspective these methods also
+find some factors to classify both the user and the movie.
+In this way $P$ would indicate the amount associated of each one of the factors 
+per user, and $Q$ similarly indicates the amount of each one of the factors
+per movie. 
+
+
+Following this idea, the prediction of the rating that a customer $u$ gives to a movie $m$
+can be expressed as:
+$$
+\hat{r}_{u_m} = \sum_{k=1}^K (P)_{u,k} \cdot (Q)_{m,k}
+$$
+
+
+In practice the training observations are used to construct $R$, but in genaral
+they can not be completly fill $R$, so missing values can be filled with an average. 
+Some methods like gradient descend can be used to create an approximation of
+the factorization, fortunatelly the package `recosystem` can create an
+approximation for us:
+<https://cran.r-project.org/web/packages/recosystem/vignettes/introduction.html>.
+
+
+For this project a matrix factorization is applied to the residuals of the model based
+on the movie and user effect. The residuals would be defined by the following equation,
+they are expected to be averaged at zero:
+$$
+\varepsilon_{u,m} = r_{u,m} - \mu - b_{m} - b_{u}
+$$
+where:
+
+* $r_{u,m}$ is the rating given by the user $u$ to the movie $m$
+* $\mu$ is the average of the observed ratings
+* $b_{m}$ is the observed effect for a particular movie $m$ (movie bias)
+* $b_{u}$ is the observed effect for a particular user $u$ (user bias)
+* $\varepsilon_{u,m}$ is residual of the prediction of the rating for the 
+user $u$ to the movie $m$
+
+
+Then a matrix factorization is applied to the residuals, the missed
+residuals from the observations are just filled with zeros.
+In this way the residuals would be approximated as $P Q^t$, where $P$ is the matrix of 
+factors per user and $Q$ the matrix of factors per movie, for a given number of 
+factors $K$. So a residual can be expressed as:
+$$
+\varepsilon_{u,m} \approx \sum_{k=1}^N (P)_{u,k} \cdot (Q)_{m,k}
+$$
+
+Then, the prediction of the rating that an user $u$ gives to a movie $m$ would be
+defined by the formula:
+$$
+\hat{r}_{u,m} = \mu + b_{m} + b_{u} + \sum_{k=1}^N (P)_{u,k} \cdot (Q)_{m,k}
+$$
+or interpretated as well as:
+$$
+\hat{r}_{u,m} = \mu + b_{m} + b_{u} + \sum_{k=1}^N p_{u,k} \cdot q_{m,k}
+$$
+where:
+
+* $p_{u,k}$ is the amount of the factor $k$ that the user $u$ has
+* $q_{m,k}$ is the amount of the factor $u$ that the movie $m$ has
 
 
 
-<https://cran.r-project.org/web/packages/recosystem/vignettes/introduction.html>
 
 
 # Results
