@@ -194,7 +194,11 @@ get_performance_metrics <- function(training_set, validation_set, model_generato
              'Accuracy' = accuracies)
 }
 
-get_performance_metrics(edx, validation, RModeModel)
+if (!exists('results_RModeModel')) {
+  results_RModeModel <-
+    get_performance_metrics(edx, validation, RModeModel)
+}
+results_RModeModel
 
 
 #' This object-constructor function is used to generate a model
@@ -218,18 +222,22 @@ RAvgModel <- function(dataset) {
   model
 }
 
-get_performance_metrics(edx, validation, RAvgModel)
+if (!exists('results_RAvgModel')) {
+  results_RAvgModel <-
+    get_performance_metrics(edx, validation, RAvgModel)
+}
+results_RAvgModel
 
 
 #' This object-constructor function is used to generate a model
 #' of the form:
 #'   r_u,m = mu + b_m + b_u + E_u,m
-#'
-#' Where 'r_u,m' is the rating given by an user 'u' to a movie 'm',
-#' 'mu' is the average of all the observed ratings,
-#' 'b_m' is the movie effect (movie bias) of a movie 'm',
-#' 'b_u' is the user effect (user bias) of an user 'u',
-#' and 'E_u,m' is the error in the prediction.
+#' where:
+#'  - 'r_u,m' is the rating given by an user 'u' to a movie 'm'
+#'  - 'mu' is the average of all the observed ratings
+#'  - 'b_m' is the movie effect (movie bias) of a movie 'm'
+#'  - 'b_u' is the user effect (user bias) of an user 'u'
+#'  - 'E_u,m' is the error in the prediction.
 #'
 #' @param dataset The dataset used to fit the model
 #' @return The model
@@ -252,10 +260,10 @@ MovieUserEffectModel <- function(dataset) {
 
   #' The prediction function, it retrieves as prediction:
   #'   mu + b_m + b_u
-  #'
-  #' Where 'mu' is the average of all the observed ratings during training,
-  #' 'b_m' is the movie effect (movie bias) observed during training for a movie 'm',
-  #' and b_u' is the user effect (user bias) observed during training for an user 'u'
+  #' where:
+  #'  - 'mu' is the average of all the observed ratings during training
+  #'  - 'b_m' is the movie effect (movie bias) observed during training for a movie 'm'
+  #'  -  b_u' is the user effect (user bias) observed during training for an user 'u'
   #'
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction
@@ -272,7 +280,11 @@ MovieUserEffectModel <- function(dataset) {
   model
 }
 
-get_performance_metrics(edx, validation, MovieUserEffectModel)
+if (!exists('results_MovieUserEffectModel')) {
+  results_MovieUserEffectModel <-
+    get_performance_metrics(edx, validation, MovieUserEffectModel)
+}
+results_MovieUserEffectModel
 
 
 #' This object-constructor function is used to generate a model
@@ -326,9 +338,9 @@ RFNaiveBayesModel <- function(dataset) {
   #' The prediction function, it retrieves as prediction the rating 'r'
   #' that gives the maximun of the products: 
   #'    p(r|u) * p(r|m)
-  #'
-  #' Where 'p(r|u)' is the probability that the user 'u' gives a rating 'r',
-  #' and 'p(r|m)' is the probability that the movie 'm' is rated as 'r'
+  #' where:
+  #'  - 'p(r|u)' is the probability that the user 'u' gives a rating 'r'
+  #'  - 'p(r|m)' is the probability that the movie 'm' is rated as 'r'
   #'
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction
@@ -366,7 +378,12 @@ RFNaiveBayesModel <- function(dataset) {
   model
 }
 
-get_performance_metrics(edx, validation, NaiveBayesModel)
+if (!exists('results_NaiveBayesModel')) {
+  results_NaiveBayesModel <-
+    get_performance_metrics(edx, validation, NaiveBayesModel)
+}
+results_NaiveBayesModel
+
 
 
 #' This object-constructor function is used to generate a model
@@ -415,13 +432,13 @@ RFRecModel <- function(dataset) {
   #' The prediction function, it retrieves as prediction the rating 'r'
   #' that gives the maximun of the products: 
   #'    (freq_user(u, r) + 1 + 1_user(u,r)) * (freq_movie(m, r) + 1 + 1_movie(m,r))
-  #'
-  #' Where 'freq_user(u, r)' is the frequency of the rating 'r' given for the user 'u',
-  #' 'freq_movie(m, r)' is the frequency of the rating 'r' given to the movie 'm',
-  #' '1_user(u,r)' is 1 if 'r' corresponds to the given average 
-  #' (rounded to the closest existing rating) of the user 'u', or 0 otherwise,
-  #' '1_movie(m,r)' is 1 if 'r' corresponds to the given average
-  #' (rounded to the closest existing rating) of the movie 'm', or 0 otherwise
+  #' where:
+  #'  - 'freq_user(u, r)' is the frequency of the rating 'r' given for the user 'u'
+  #'  - 'freq_movie(m, r)' is the frequency of the rating 'r' given to the movie 'm'
+  #'  - '1_user(u,r)' is 1 if 'r' corresponds to the given average 
+  #'     (rounded to the closest existing rating) of the user 'u', or 0 otherwise
+  #'  - '1_movie(m,r)' is 1 if 'r' corresponds to the given average
+  #'     (rounded to the closest existing rating) of the movie 'm', or 0 otherwise
   #'
   #' @param s The dataset used to perform the prediction of
   #' @return A vector containing the prediction
@@ -466,8 +483,11 @@ RFRecModel <- function(dataset) {
   model
 }
 
-get_performance_metrics(edx, validation, RFRecModel)
-
+if (!exists('results_RFRecModel')) {
+  results_RFRecModel <-
+    get_performance_metrics(edx, validation, RFRecModel)
+}
+results_RFRecModel
 
 
 library(recosystem)
@@ -520,8 +540,12 @@ MatrixFactorizationModel <- function(s) {
   model
 }
 
-set.seed(0)
-get_performance_metrics(MatrixFactorizationModel)
+if (!exists('results_MatrixFactorizationModel')) {
+  set.seed(0)
+  results_MatrixFactorizationModel <-
+    get_performance_metrics(MatrixFactorizationModel)
+}
+results_MatrixFactorizationModel
 
 #---------------------
 
