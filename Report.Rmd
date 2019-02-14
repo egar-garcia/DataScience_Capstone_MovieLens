@@ -5,11 +5,14 @@ date: "2/11/2019"
 output:
   pdf_document:
     number_sections: true
+    fig_width: 4
+    fig_height: 3
 ---
 
 ```{r, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
 
 
 # Overview
@@ -28,82 +31,18 @@ The goal is to reach an RMSE of `0.87750` or less for the system's
 predictions agains the groud thuth applied to the validation set.
 
 
-# Methodology
+
+# Analysis of the data
 
 
-To evaluate the different (machine learning) methods tested in this report, an
-object-oriented approach is used, each method is going to be represented 
-by a model which would be generated through the construction of an object.
+## A first look
 
 
-To generate a model, the constructor function receives a dataset (the training set) 
-which is used to fit the model an construct its object.
-The model's object includes a `predict` function used to perform a prediction
-for another dataset (which could be the one for testing, validation, production, etc.).
+Let's take an initial look at how the ratings are distributed by plotting a
+histogram to account the amount of the different ratings given by the customers.
 
 
-For example, the following function creates and object to represent a model that always
-gives the most common rate (the mode) of the training set as prediction:
-```{r}
-#' This object-constructor function is used to generate a model that returns 
-#' a as prediction the most common rating in the dataset used to fit it.
-#' @param dataset The dataset used to fit the model
-#' @return The model
-RModeModel <- function(dataset) {
-  model <- list()
-  
-  model$ratings <- unique(dataset$rating)
-  model$mode <- model$ratings[which.max(tabulate(match(dataset$rating, model$ratings)))]
-  
-  #' The prediction function
-  #' @param s The dataset used to perform the prediction of
-  #' @return A vector containing the prediction for the given dataset
-  model$predict <- function(s) {
-    model$mode
-  }
-  
-  model
-}
-```
-
-
-Using the constructor function, an object can be created to fit the particular model,
-p.e:
-```{r}
-model <- RModeModel(edx)
-```
-
-
-Then this model can be used to make predictions, p.e. the following code makes
-predictions using the training and the validation sets:
-```{r}
-training_pred <- model$predict(edx)
-validation_pred <- model$predict(validation)
-```
-
-
-And the predictions are helpful to messure the performance of the model in terms of
-RMSE and/or accuracy, applied to the training and validation sets, p.e:
-```{r}
-sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
-        RMSE(training_pred, edx$rating),
-        mean(training_pred == edx$rating),
-        RMSE(validation_pred, validation$rating),
-        mean(validation_pred == validation$rating))
-```
-
-
-```{r, echo=FALSE}
-rm(model, training_pred, validation_pred)
-```
-
-
-## Analysing the data
-
-
-Let's take an initial look at how the ratings are distributed, by plotting an
-histogram to account the amount of the different ratings given by the customers:
-```{r}
+```{r ratings_dist, fig.align="center"}
 edx %>%
   ggplot() +
   geom_histogram(aes(x = rating), binwidth = 0.25)
@@ -112,13 +51,15 @@ edx %>%
 
 It can be observed that ratings can be interpreted as the number of starts
 from 1 to 5 that users give to a movie, however it can be seen that
-ratings ending with a half are used, at first impression looks like
+ratings ending with a half star are used, at first impression looks like
 half start ratings are not very popular among users.
 
 
 Let's visualize the data from another point of view, this time plotting
 the ratings against the timestamp, we can use `lubridate` to transform
 the timestamps to a more friendly format.
+
+
 ```{r}
 library(lubridate)
 ```
@@ -127,10 +68,12 @@ library(lubridate)
 For exploratory purposes lets just plot
 using a small subset of the dataset, since using the whole one might take a lot of
 time and resources:
-```{r, echo=FALSE}
+
+
+```{r , echo=FALSE}
 set.seed(0)
 ```
-```{r}
+```{r ratings_by_timestamp, fig.align="center"}
 edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
   ggplot(aes(x = as_datetime(timestamp), y = rating)) +
   geom_point() +
@@ -221,6 +164,77 @@ For example, it might be that a partucular user had a tendency to rate movies wi
 4 stars before `r as_datetime(half_stars_startpoint)`, but then after that date the 
 same user might have changed its tendency to rate 3.5 instead, since now half-stars
 were allowed.
+
+
+# Methodology
+
+
+To evaluate the different (machine learning) methods tested in this report, an
+object-oriented approach is used, each method is going to be represented 
+by a model which would be generated through the construction of an object.
+
+
+To generate a model, the constructor function receives a dataset (the training set) 
+which is used to fit the model an construct its object.
+The model's object includes a `predict` function used to perform a prediction
+for another dataset (which could be the one for testing, validation, production, etc.).
+
+
+For example, the following function creates and object to represent a model that always
+gives the most common rate (the mode) of the training set as prediction:
+```{r}
+#' This object-constructor function is used to generate a model that returns 
+#' a as prediction the most common rating in the dataset used to fit it.
+#' @param dataset The dataset used to fit the model
+#' @return The model
+RModeModel <- function(dataset) {
+  model <- list()
+  
+  model$ratings <- unique(dataset$rating)
+  model$mode <- model$ratings[which.max(tabulate(match(dataset$rating, model$ratings)))]
+  
+  #' The prediction function
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction for the given dataset
+  model$predict <- function(s) {
+    model$mode
+  }
+  
+  model
+}
+```
+
+
+Using the constructor function, an object can be created to fit the particular model,
+p.e:
+```{r}
+model <- RModeModel(edx)
+```
+
+
+Then this model can be used to make predictions, p.e. the following code makes
+predictions using the training and the validation sets:
+```{r}
+training_pred <- model$predict(edx)
+validation_pred <- model$predict(validation)
+```
+
+
+And the predictions are helpful to messure the performance of the model in terms of
+RMSE and/or accuracy, applied to the training and validation sets, p.e:
+```{r}
+sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
+        RMSE(training_pred, edx$rating),
+        mean(training_pred == edx$rating),
+        RMSE(validation_pred, validation$rating),
+        mean(validation_pred == validation$rating))
+```
+
+
+```{r, echo=FALSE}
+rm(model, training_pred, validation_pred)
+```
+
 
 
 ## Refining the metodology to use partitioned models
