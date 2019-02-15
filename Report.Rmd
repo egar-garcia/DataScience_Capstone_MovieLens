@@ -23,6 +23,7 @@ eval_RAvgModel <- !exists('results_RAvgModel')
 eval_MovieUserEffectModel <- !exists('results_MovieUserEffectModel')
 eval_RFNaiveBayesModel <- !exists('results_RFNaiveBayesModel')
 eval_RFRecModel <- !exists('results_RFRecModel')
+eval_ResidualsMatrixFactorizationModel <- !exists('results_ResidualsMatrixFactorizationModel')
 ```
 
 
@@ -422,7 +423,7 @@ the results in a dataset, which can be included as a table in this report.
 get_performance_metrics <- function(method_name, training_set, validation_set,
                                     model_generator) {
 
-  result <- data.frame('METHOD' = character(), 'SET_TYPE' = character(),
+  result <- data.frame('METHOD' = character(), 'SET_MODEL' = character(),
                        'TRAIN_TIME' = integer(),
                        'PRED_TRAIN_TIME' = integer(), 'PRED_VAL_TIME' = integer(),
                        'TRAIN_RMSE' = double(), 'TRAIN_ACC' = double(),
@@ -499,9 +500,10 @@ get_performance_metrics(edx, validation, model_generator)
 
 For example, to get the performance of the previosly defined model that 
 always predict the most common rating of the training set,
-the following code retrieves the performance results and includes them
-in two tables, the first one related to the results of RMSE/accuracy, 
-and the second one related to the time it takes for training/prediction.
+the following code can be used to retrieve the performance results and 
+then to includes them in two tables, the first one related to the results of
+the RMSE/accuracy,  and the second one related to the time it takes for
+training/prediction.
 
 
 ```{r example_results_retrieval, eval=FALSE}
@@ -509,11 +511,11 @@ results_RModeModel <-
     get_performance_metrics('Ratings Mode', edx, validation, RModeModel)
 
 knitr::kable(results_RModeModel %>%
-               select('METHOD', 'SET_TYPE',
+               select('METHOD', 'SET_MODEL',
                       'TRAIN_RMSE', 'TRAIN_ACC', 'VAL_RMSE', 'VAL_ACC'))
 
 knitr::kable(results_RModeModel %>%
-               select('METHOD', 'SET_TYPE',
+               select('METHOD', 'SET_MODEL',
                       'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
 ```
 
@@ -1116,13 +1118,13 @@ knitr::kable(results_RFRecModel %>%
 
 
 
-## Matrix Factorization
+## Model based on matrix factorization of residuals
 
 
 Matrix factorization methods consinst in factorizing a matrix of ratings 
-$R_{U \times M}$ (where $U$ is the number of users and $M$ the number of movies)
+$R_{U \times M}$ -- being $U$ the number of users and $M$ the number of movies --
 as the product of two matrices of lower dimension $P_{U \times K}$ and 
-$Q_{M \times K}$ (where $K$ is a given number of factors). 
+$Q_{M \times K}$ -- being $K$ a given number of factors --. 
 
 $$
 R = P Q^t
@@ -1130,8 +1132,9 @@ $$
 
 
 Matrix factorization methods consist in finding an approximation to such $P$ and $Q$
-matrices, given a number of factors $K$. From this perspective these methods also
-find some factors to classify both the user and the movie.
+matrices given a number of factors $K$.
+From this perspective these methods also find some factors to classify both 
+the user and the movie.
 In this way $P$ would indicate the amount associated of each one of the factors 
 per user, and $Q$ similarly indicates the amount of each one of the factors
 per movie. 
@@ -1140,12 +1143,13 @@ per movie.
 Following this idea, the prediction of the rating that a customer $u$ gives to a movie $m$
 can be expressed as:
 $$
-\hat{r}_{u_m} = \sum_{k=1}^K (P)_{u,k} \cdot (Q)_{m,k}
+\hat{r}_{u,m} = \sum_{k=1}^K (P)_{u,k} \cdot (Q)_{m,k}
 $$
 
 
 In practice the training observations are used to construct $R$, but in genaral
-they can not be completly fill $R$, so missing values can be filled with an average. 
+they can not be completly fill the matrix $R$, so missing values can be filled
+with an average value.
 Some methods like gradient descend can be used to create an approximation of
 the factorization, fortunatelly the package `recosystem` can create an
 approximation for us:
@@ -1154,7 +1158,7 @@ approximation for us:
 
 For this project a matrix factorization is applied to the residuals of the model based
 on the movie and user effect. The residuals would be defined by the following equation,
-they are expected to be averaged at zero:
+they are assumed to be averaged at zero:
 $$
 \varepsilon_{u,m} = r_{u,m} - \mu - b_{m} - b_{u}
 $$
@@ -1170,12 +1174,23 @@ user $u$ to the movie $m$
 
 Then a matrix factorization is applied to the residuals, the missed
 residuals from the observations are just filled with zeros.
-In this way the residuals would be approximated as $P Q^t$, where $P$ is the matrix of 
-factors per user and $Q$ the matrix of factors per movie, for a given number of 
-factors $K$. So a residual can be expressed as:
+In this way the matrix of residuals $E = (\varepsilon_{u,m})$ 
+involvimg all the users and movies, would be approximated as:
+$$
+E = P Q^t
+$$
+where:
+
+* $P$ is the matrix of factors per user, with size $U \times K$
+* $Q$ the matrix of factors per movie, with size $M \times K$
+* $K$ is the given number of factors
+
+
+Following this idea a residual can be expressed as:
 $$
 \varepsilon_{u,m} \approx \sum_{k=1}^N (P)_{u,k} \cdot (Q)_{m,k}
 $$
+
 
 Then, the prediction of the rating that an user $u$ gives to a movie $m$ would be
 defined by the formula:
@@ -1189,14 +1204,173 @@ $$
 where:
 
 * $p_{u,k}$ is the amount of the factor $k$ that the user $u$ has
-* $q_{m,k}$ is the amount of the factor $u$ that the movie $m$ has
+* $q_{m,k}$ is the amount of the factor $k$ that the movie $m$ has
 
 
+The following constructor function creates an object to repesent this model,
+in this case a number of factors $K$ of 30 is used.
+
+
+```{r constructor_ResidualsMatrixFactorizationModel, echo=FALSE, eval=eval_ResidualsMatrixFactorizationModel}
+if(!require(recosystem))
+  install.packages("recosystem", repos = "http://cran.us.r-project.org")
+library(recosystem)
+
+#' This object-constructor function is used to generate a model
+#' of the form:
+#'   r_u,m ~ mu + b_m + b_u + sum {k = 1..K} (p_u,k * q_m_k)
+#' where:
+#'  - 'r_u,m' is the rating given by an user 'u' to a movie 'm'
+#'  - 'mu' is the average of all the observed ratings
+#'  - 'b_m' is the movie effect (movie bias) of a movie 'm'
+#'  - 'b_u' is the user effect (user bias) of an user 'u'
+#'  - 'p_u,k' is the amount of the factor 'k' that the user 'u' has
+#'  - 'q_m,k' is the amount of the factor 'k' that the movie 'm' has
+#'  - 'K' is the number of (latent) factors
+#'
+#' @param dataset The dataset used to fit the model
+#' @return The model
+ResidualsMatrixFactorizationModel <- function(dataset) {
+  model <- list()
+
+  # The average of all the ratings in the dataset
+  model$mu <- mean(dataset$rating)
+
+  # Getting the movie bias for each movie
+  model$movie_info <- dataset %>%
+    group_by(movieId) %>%
+    summarise(movie_bias = mean(rating - model$mu))
+
+  # Getting the user bias for each user
+  model$user_info <- dataset %>%
+    left_join(model$movie_info, by = 'movieId') %>%
+    group_by(userId) %>%
+    summarise(user_bias = mean(rating - movie_bias - model$mu))
+
+  # Gettint the training set containing the residuals
+  training_set <- dataset %>%
+    left_join(model$movie_info, by = 'movieId') %>%
+    left_join(model$user_info, by = 'userId') %>%
+    mutate(residual = rating - (model$mu + movie_bias + user_bias))
+
+  # Training set to perform the matroix factorization of the residuals
+  train_data <- data_memory(user_index = training_set$userId,
+                            item_index = training_set$movieId, 
+                            rating = training_set$residual,
+                            index1 = T)
+  # Training a recomender, this is the one that does the matrix factorization
+  # in this case for 30 factors
+  model$recommender <- Reco()
+  model$recommender$train(train_data,
+                          opts = c(dim = 30, costp_l2 = 0.1, costq_l2 = 0.1, 
+                                   lrate = 0.1, niter = 100, nthread = 6,
+                                   verbose = F))
+
+  #' The prediction function, it retrieves as prediction:
+  #'   mu + b_m + b_u + sum {k = 1..K} (p_u,k * q_m_k)
+  #' where:
+  #'  - 'mu' is the average of all the observed ratings during training
+  #'  - 'b_m' is the movie effect (movie bias) observed during training for a movie 'm'
+  #'  -  b_u' is the user effect (user bias) observed during training for an user 'u'
+  #'  - 'p_u,k' is the quantity of the factor 'k' that the user 'u' has,
+  #'            calculated by matrix factorization
+  #'  - 'q_m,k' is the quantity of the factor 'k' that the movie 'm' has,
+  #'            calculated by matrix factorization
+  #'  - 'K' is the number of (latent) factors, in this case 30
+  #'
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction
+  model$predict <- function(s) {
+    # Dataset used to do the prediction, based on the movie and user
+    pred_data <- data_memory(user_index = s$userId, item_index = s$movieId, index1 = T)
+
+    # Predicting the residual
+    pred_residuals <- model$recommender$predict(pred_data, out_memory())
+
+    # Prediction based in movie and user effects, plus the prediction of the residual
+    s %>%
+      left_join(model$movie_info, by = 'movieId') %>%
+      left_join(model$user_info, by = 'userId') %>%
+      mutate(pred = pred_residuals + model$mu +
+                    ifelse(!is.na(movie_bias), movie_bias, 0) +
+                    ifelse(!is.na(user_bias), user_bias, 0)) %>%
+      .$pred
+  }
+
+  model
+}
+```
+
+
+The performance of this model is displayed in the following table.
+
+
+```{r results_ResidualsMatrixFactorizationModel, echo=FALSE, eval=eval_ResidualsMatrixFactorizationModel}
+set.seed(0)
+results_ResidualsMatrixFactorizationModel <-
+    get_performance_metrics('Residuals Matrix Factorization', edx, validation, ResidualsMatrixFactorizationModel)
+```
+
+```{r disp_results_ResidualsMatrixFactorizationModel, results = 'asis', echo=FALSE}
+knitr::kable(results_ResidualsMatrixFactorizationModel %>%
+               select('METHOD', 'SET_MODEL',
+                      'TRAIN_RMSE', 'TRAIN_ACC', 'VAL_RMSE', 'VAL_ACC'))
+
+knitr::kable(results_ResidualsMatrixFactorizationModel %>%
+               select('METHOD', 'SET_MODEL',
+                      'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
+```
 
 
 
 # Results
 
 
+```{r echo=FALSE}
+results <- rbind(results_RModeModel,
+                 results_RAvgModel,
+                 results_MovieUserEffectModel,
+                 results_RFNaiveBayesModel,
+                 results_RFRecModel,
+                 results_ResidualsMatrixFactorizationModel)
+```
+
+
+```{r results_per_rmse, results = 'asis', echo=FALSE}
+knitr::kable(results[order(results$VAL_RMSE),] %>%
+               select(METHOD, SET_MODEL, VAL_RMSE))
+```
+
+
+```{r results_per_acc, results = 'asis', echo=FALSE}
+knitr::kable(results[order(-results$VAL_ACC),] %>% select(METHOD, SET_MODEL, VAL_ACC))
+```
+
+
+```{r results_per_traininig_time, results = 'asis', echo=FALSE}
+knitr::kable(results[order(results$TRAIN_TIME),] %>% select(METHOD, SET_MODEL, TRAIN_TIME))
+```
+
+
+```{r results_per_prediction_time, results = 'asis', echo=FALSE}
+knitr::kable(results[order(results$PRED_VAL_TIME),] %>% select(METHOD, SET_MODEL, PRED_VAL_TIME))
+```
+
+
 # Conclusion
 
+
+```{r clean_up, include=FALSE}
+rm(eval_sets_generation,
+   eval_half_stars_startpoint,
+   eval_RModeModel,
+   eval_PartitionedModel,
+   eval_pred2stars,
+   eval_get_performance_metrics,
+   eval_results_RModeModel,
+   eval_RAvgModel,
+   eval_MovieUserEffectModel,
+   eval_RFNaiveBayesModel,
+   eval_RFRecModel,
+   eval_MatrixFactorizationModel)
+```

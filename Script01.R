@@ -216,7 +216,7 @@ get_performance_metrics <- function(method_name, training_set, validation_set,
 }
 
 results_RModeModel <-
-    get_performance_metrics('Ratings Mode', edx, validation, RModeModel)
+  get_performance_metrics('Ratings Mode', edx, validation, RModeModel)
 
 
 #' This object-constructor function is used to generate a model
@@ -240,11 +240,8 @@ RAvgModel <- function(dataset) {
   model
 }
 
-if (!exists('results_RAvgModel')) {
-  results_RAvgModel <-
-    get_performance_metrics(edx, validation, RAvgModel)
-}
-results_RAvgModel
+results_RAvgModel <-
+  get_performance_metrics('Ratings Average', edx, validation, RAvgModel)
 
 
 #' This object-constructor function is used to generate a model
@@ -298,11 +295,8 @@ MovieUserEffectModel <- function(dataset) {
   model
 }
 
-if (!exists('results_MovieUserEffectModel')) {
-  results_MovieUserEffectModel <-
-    get_performance_metrics(edx, validation, MovieUserEffectModel)
-}
-results_MovieUserEffectModel
+results_MovieUserEffectModel <-
+  get_performance_metrics('Movie and User Effect', edx, validation, MovieUserEffectModel)
 
 
 #' This object-constructor function is used to generate a model
@@ -396,12 +390,8 @@ RFNaiveBayesModel <- function(dataset) {
   model
 }
 
-if (!exists('results_NaiveBayesModel')) {
-  results_NaiveBayesModel <-
-    get_performance_metrics(edx, validation, NaiveBayesModel)
-}
-results_NaiveBayesModel
-
+results_RFNaiveBayesModel <-
+  get_performance_metrics('RF Naive-Bayes', edx, validation, RFNaiveBayesModel)
 
 
 #' This object-constructor function is used to generate a model
@@ -501,28 +491,29 @@ RFRecModel <- function(dataset) {
   model
 }
 
-if (!exists('results_RFRecModel')) {
-  results_RFRecModel <-
-    get_performance_metrics(edx, validation, RFRecModel)
-}
-results_RFRecModel
+results_RFRecModel <-
+  get_performance_metrics('RF-Rec', edx, validation, RFRecModel)
 
 
+if(!require(recosystem))
+  install.packages("recosystem", repos = "http://cran.us.r-project.org")
 library(recosystem)
 
 #' This object-constructor function is used to generate a model
 #' of the form:
-#'   r_u,m ~ mu + b_m + b_u + sum(p_u,k * q_m_k)
+#'   r_u,m ~ mu + b_m + b_u + sum {k = 1..K} (p_u,k * q_m_k)
 #' where:
 #'  - 'r_u,m' is the rating given by an user 'u' to a movie 'm'
 #'  - 'mu' is the average of all the observed ratings
 #'  - 'b_m' is the movie effect (movie bias) of a movie 'm'
 #'  - 'b_u' is the user effect (user bias) of an user 'u'
-#'  - 'E_u,m' is the error in the prediction.
+#'  - 'p_u,k' is the amount of the factor 'k' that the user 'u' has
+#'  - 'q_m,k' is the amount of the factor 'k' that the movie 'm' has
+#'  - 'K' is the number of (latent) factors
 #'
 #' @param dataset The dataset used to fit the model
 #' @return The model
-MatrixFactorizationModel <- function(dataset) {
+ResidualsMatrixFactorizationModel <- function(dataset) {
   model <- list()
 
   # The average of all the ratings in the dataset
@@ -558,12 +549,28 @@ MatrixFactorizationModel <- function(dataset) {
                                    lrate = 0.1, niter = 100, nthread = 6,
                                    verbose = F))
 
+  #' The prediction function, it retrieves as prediction:
+  #'   mu + b_m + b_u + sum {k = 1..K} (p_u,k * q_m_k)
+  #' where:
+  #'  - 'mu' is the average of all the observed ratings during training
+  #'  - 'b_m' is the movie effect (movie bias) observed during training for a movie 'm'
+  #'  -  b_u' is the user effect (user bias) observed during training for an user 'u'
+  #'  - 'p_u,k' is the quantity of the factor 'k' that the user 'u' has,
+  #'            calculated by matrix factorization
+  #'  - 'q_m,k' is the quantity of the factor 'k' that the movie 'm' has,
+  #'            calculated by matrix factorization
+  #'  - 'K' is the number of (latent) factors, in this case 30
+  #'
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction
   model$predict <- function(s) {
-    pred_data <- data_memory(user_index = s$userId, item_index = t$movieId, 
-                             index1 = T)
+    # Dataset used to do the prediction, based on the movie and user
+    pred_data <- data_memory(user_index = s$userId, item_index = s$movieId, index1 = T)
 
+    # Predicting the residual
     pred_residuals <- model$recommender$predict(pred_data, out_memory())
 
+    # Prediction based in movie and user effects, plus the prediction of the residual
     s %>%
       left_join(model$movie_info, by = 'movieId') %>%
       left_join(model$user_info, by = 'userId') %>%
@@ -576,12 +583,9 @@ MatrixFactorizationModel <- function(dataset) {
   model
 }
 
-if (!exists('results_MatrixFactorizationModel')) {
-  set.seed(0)
-  results_MatrixFactorizationModel <-
-    get_performance_metrics(MatrixFactorizationModel)
-}
-results_MatrixFactorizationModel
+set.seed(0)
+results_ResidualsMatrixFactorizationModel <-
+  get_performance_metrics('Matrix Factorization', edx, validation, ResidualsMatrixFactorizationModel)
 
 #---------------------
 
@@ -591,14 +595,8 @@ genres <- genres[!is.na(genres) & genres != '(no genres listed)']
 # Generating the column names to use in order to identify the presence of a genre
 genre_cols <- str_replace_all(tolower(genres), '-', '_')
 
-# Colums used to store the weights of the genres in a movie.
-genre_user_weight_cols <- paste(genre_cols, 'user_weight', sep = '_')
-# Colums used to store the weights of the genres in an user.
-genre_movie_weight_cols <- paste(genre_cols, 'movie_weight', sep = '_')
-# Colums used to store the bias per genre of an user.
-genre_user_bias_cols <- paste(genre_cols, 'user_bias', sep = '_')
-
-
+# Function to split a column that contains a list of genres in
+# several columns that indicate the presence of a genre
 set_one_hot_genres <- function(t) {
   # Adding a column for each genre with a boolean value to indicate 
   # the presence of the respective genre.
@@ -611,13 +609,21 @@ set_one_hot_genres <- function(t) {
   t %>% select(-genres)
 }
 
+# Transforming the edx set to a version that includes one-hot columns for the genres
+edx_one_hot_genres <- set_one_hot_genres(edx) %>% select(-title)
 
-ext_edx <- set_one_hot_genres(edx) %>% select(-title)
+
+# Colums used to store the weights of the genres in a movie.
+genre_user_weight_cols <- paste(genre_cols, 'user_weight', sep = '_')
+# Colums used to store the weights of the genres in an user.
+genre_movie_weight_cols <- paste(genre_cols, 'movie_weight', sep = '_')
+# Colums used to store the bias per genre of an user.
+genre_user_bias_cols <- paste(genre_cols, 'user_bias', sep = '_')
 
 # Grouping the dataset by user to get the weights per genre.
 # The weight is intended to reflect the user's proportion of rated movies
 # with a particular genre.
-user_genre_weights <- ext_edx %>%
+user_genre_weights <- edx_one_hot_genres %>%
   group_by(userId) %>%
   summarise_at(genre_cols, funs(user_weight = mean(.)))
 
@@ -625,7 +631,7 @@ user_genre_weights <- ext_edx %>%
 # for the user's weight if TRUE, or 0 (zero) if FALSE.
 # The idea is that each row contains the apportation of the customer's 
 # preference per genre.
-tmp_movie_genre_weights <- ext_edx %>%
+tmp_movie_genre_weights <- edx_one_hot_genres %>%
   left_join(user_genre_weights, by = 'userId')
 for (i in 1:length(genre_cols)) {
   tmp_movie_genre_weights[[genre_cols[i]]] <- 
@@ -729,14 +735,25 @@ LinearLikeGenreBiasBasedModel <- function(s) {
   model
 }
 
-get_performance_metrics(ext_edx, validation, LinearLikeGenreBiasBasedModel)
+get_performance_metrics('X', edx_one_hot_genres, validation, LinearLikeGenreBiasBasedModel)
 
 #---
-model <- LinearLikeGenreBiasBasedModel(ext_edx)
-pred <- model$predict(edx)
-RMSE(edx$rating, pred)
-mean(edx$rating == pred2stars(edx$timestamp, pred))
-pred <- model$predict(validation)
-RMSE(validation$rating, pred)
-mean(validation$rating == pred2stars(validation$timestamp, pred))
+results <- rbind(results_RModeModel,
+                 results_RAvgModel,
+                 results_MovieUserEffectModel,
+                 results_RFNaiveBayesModel,
+                 results_RFRecModel,
+                 results_MatrixFactorizationModel)
+
+results[order(results$VAL_RMSE),] %>% select(METHOD, SET_MODEL, VAL_RMSE)
+
+results[order(-results$VAL_ACC),] %>% select(METHOD, SET_MODEL, VAL_ACC)
+
+results[order(results$TRAIN_TIME),] %>% select(METHOD, SET_MODEL, TRAIN_TIME)
+
+results[order(results$PRED_VAL_TIME),] %>% select(METHOD, SET_MODEL, PRED_VAL_TIME)
+
+
+results[order(results$VAL_RMSE),] %>%
+  select(METHOD, SET_MODEL, VAL_RMSE, VAL_ACC, TRAIN_TIME, PRED_VAL_TIME)
 
