@@ -431,18 +431,20 @@ get_performance_metrics <- function(method_name, training_set, validation_set,
     counter <- counter + 1
     result[counter,] <- list(method_name, NA, NA, NA, NA, NA, NA)
 
-    train_start <- Sys.time()
+    train_start <- Sys.time() # recording start o the training
 
     # Chosing the set type: partitioned or whole
     if (is_partitioned) {
-      result[counter, 'SET_TYPE'] <- 'partitioned'
+      result[counter, 'SET_MODEL'] <- 'partitioned'
       model <- PartitionedModel(training_set, model_generator)
     } else {
-      result[counter, 'SET_TYPE'] <- 'whole'
+      result[counter, 'SET_MODEL'] <- 'whole'
       model <- model_generator(training_set)
     }
 
-    train_end <- Sys.time()
+    train_end <- Sys.time() # recording the end of the training
+
+    # Recording the time spent on training
     result[counter, 'TRAIN_TIME'] <- train_end - train_start
 
     for (is_training in c(TRUE, FALSE)) {
@@ -453,13 +455,14 @@ get_performance_metrics <- function(method_name, training_set, validation_set,
         ds <- validation_set
       }
 
-      pred_start <- Sys.time()
+      pred_start <- Sys.time() # recording the start of the prediction
 
       # Getting the prediction for the chosen dataset
       pred <- model$predict(ds)
 
-      pred_end <- Sys.time()
+      pred_end <- Sys.time() # recording the end of the prediction
 
+      # Recording the time spent on the prediction
       result[counter, ifelse(is_training, 'PRED_TRAIN_TIME', 'PRED_VAL_TIME')] <-
         pred_end - pred_start
 
@@ -497,7 +500,7 @@ in two tables, the first one related to the results of RMSE/accuracy,
 and the second one related to the time it takes for training/prediction.
 
 
-```{r eval=FALSE}
+```{r example_results_retrieval, eval=FALSE}
 results_RModeModel <-
     get_performance_metrics('Ratings Mode', edx, validation, RModeModel)
 
@@ -517,14 +520,55 @@ results_RModeModel <-
 
 ```{r disp_results_RModeModel, results = 'asis', echo=FALSE}
 knitr::kable(results_RModeModel %>%
-               select('METHOD', 'SET_TYPE',
+               select('METHOD', 'SET_MODEL',
                       'TRAIN_RMSE', 'TRAIN_ACC', 'VAL_RMSE', 'VAL_ACC'))
 
 knitr::kable(results_RModeModel %>%
-               select('METHOD', 'SET_TYPE',
+               select('METHOD', 'SET_MODEL',
                       'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
 ```
 
+
+The previously described mechanism is how the differemt methods are going to be tested
+in this report, i.e. an object-model is generated then the performance's results are
+calculated and displayed.
+
+
+The performance is evaluated in two ways for each model, the first one fitting 
+the model with the whole training set, and the second one splitting the training
+set in two, one partition for observations before `r as_datetime(half_stars_startpoint)`
+and the other one for observations on of after that point in time.
+
+The displaying of the performance's results woule be done in two tables 
+(for visual pursposes) per model:
+
+* The first table includes:
+
+     + METHOD: The method's name
+     + SET_MODEL: The type of model in regards to the dataset,
+       which can be `whole` meaning the whole dataset is used to fit the model,
+       or `partitioned` meaning that a partition given by the point in time
+       `r as_datetime(half_stars_startpoint)` is used for the fitting
+     + TRAIN_RMSE: The RMSE of the prediction against the groud thuth applied to the
+       training set
+     + TRAIN_ACC: The accuracy of the prediction against the groud thuth applied to the
+       training set
+     + VAL_RMSE: The RMSE of the prediction against the groud thuth applied to the
+       validation set
+     + VAL_ACC: The accuracy of the prediction against the groud thuth applied to the
+       valisation set
+
+* The second table includes:
+
+     + METHOD: The method's name
+     + SET_MODEL: As described above
+     + TRAIN_TIME: The time in seconds it took for the training to complete
+     + PRED_TRAIN_TIME: The time in seconds it took for the prediction applied
+       to the training set to complete
+     + PRED_VAL_TIME: The time in seconds it took for the prediction applied
+       to the validation set to complete
+  
+  
 
 
 # Methods

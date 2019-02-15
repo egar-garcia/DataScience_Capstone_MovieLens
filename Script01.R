@@ -168,18 +168,20 @@ get_performance_metrics <- function(method_name, training_set, validation_set,
     counter <- counter + 1
     result[counter,] <- list(method_name, NA, NA, NA, NA, NA, NA)
 
-    train_start <- Sys.time()
+    train_start <- Sys.time() # recording start o the training
 
     # Chosing the set type: partitioned or whole
     if (is_partitioned) {
-      result[counter, 'SET_TYPE'] <- 'partitioned'
+      result[counter, 'SET_MODEL'] <- 'partitioned'
       model <- PartitionedModel(training_set, model_generator)
     } else {
-      result[counter, 'SET_TYPE'] <- 'whole'
+      result[counter, 'SET_MODEL'] <- 'whole'
       model <- model_generator(training_set)
     }
 
-    train_end <- Sys.time()
+    train_end <- Sys.time() # recording the end of the training
+
+    # Recording the time spent on training
     result[counter, 'TRAIN_TIME'] <- train_end - train_start
 
     for (is_training in c(TRUE, FALSE)) {
@@ -190,13 +192,14 @@ get_performance_metrics <- function(method_name, training_set, validation_set,
         ds <- validation_set
       }
 
-      pred_start <- Sys.time()
+      pred_start <- Sys.time() # recording the start of the prediction
 
       # Getting the prediction for the chosen dataset
       pred <- model$predict(ds)
 
-      pred_end <- Sys.time()
+      pred_end <- Sys.time() # recording the end of the prediction
 
+      # Recording the time spent on the prediction
       result[counter, ifelse(is_training, 'PRED_TRAIN_TIME', 'PRED_VAL_TIME')] <-
         pred_end - pred_start
 
@@ -212,11 +215,8 @@ get_performance_metrics <- function(method_name, training_set, validation_set,
   result
 }
 
-if (!exists('results_RModeModel')) {
-  results_RModeModel <-
+results_RModeModel <-
     get_performance_metrics('Ratings Mode', edx, validation, RModeModel)
-}
-results_RModeModel
 
 
 #' This object-constructor function is used to generate a model
