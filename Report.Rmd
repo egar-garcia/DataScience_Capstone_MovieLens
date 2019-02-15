@@ -19,6 +19,10 @@ eval_PartitionedModel <- !exists('PartitionedModel')
 eval_pred2stars <- !exists('pred2stars')
 eval_get_performance_metrics <- !exists('get_performance_metrics')
 eval_results_RModeModel <- !exists('results_RModeModel')
+eval_RAvgModel <- !exists('results_RAvgModel')
+eval_MovieUserEffectModel <- !exists('results_MovieUserEffectModel')
+eval_RFNaiveBayesModel <- !exists('results_RFNaiveBayesModel')
+eval_RFRecModel <- !exists('results_RFRecModel')
 ```
 
 
@@ -585,7 +589,7 @@ This model is described by the following equation:
 $$
 r_{u,m} = \mu + \varepsilon_{u,m}
 $$
-Where:
+where:
 
 * $r_{u,m}$ is the rating given by the user $u$ to the movie $m$
 * $\mu$ is the average of the observed ratings
@@ -600,8 +604,11 @@ $$
 $$
 
 
-The following constructor function creates objects that represent this model:
-```{r, eval=FALSE}
+The following is the constructor function in charge of creating the model for
+this method.
+
+
+```{r, constructor_RAvgModel, eval=eval_RAvgModel}
 #' This object-constructor function is used to generate a model
 #' that always returns as prediction the average of the rating in the
 #' given dataset used to fit the model.
@@ -625,18 +632,28 @@ RAvgModel <- function(dataset) {
 ```
 
 
-The performance for this model is displayed in the following table.
-It can be observed that the performance in terms of RMSE was improved in
-comparison to the mode model, but the accuracy went worse,
-either way the performance is still bellow the one desired in this project.
-```{r results = 'asis', echo=FALSE, eval=FALSE}
-if (!exists('results_RAvgModel')) {
-  results_RAvgModel <-
-    get_performance_metrics(edx, validation, RAvgModel)
-}
-knitr::kable(results_RAvgModel,
-             caption = "Results for the model based on the ratings' average")
+The performance for this model is displayed in the following tables.
+As a general observation can be seen that the performance in terms of RMSE was 
+improved in comparison to the model based on the ratings' mode,
+however the accuracy went worse,
+either way the performance is still bellow the one desired for this project.
+
+
+```{r results_RAvgModel, echo=FALSE, eval=eval_RAvgModel}
+results_RAvgModel <-
+    get_performance_metrics('Ratings Average', edx, validation, RAvgModel)
 ```
+
+```{r disp_results_RAvgModel, results = 'asis', echo=FALSE}
+knitr::kable(results_RAvgModel %>%
+               select('METHOD', 'SET_MODEL',
+                      'TRAIN_RMSE', 'TRAIN_ACC', 'VAL_RMSE', 'VAL_ACC'))
+
+knitr::kable(results_RAvgModel %>%
+               select('METHOD', 'SET_MODEL',
+                      'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
+```
+
 
 
 ## Model based on movie and user effects
@@ -650,13 +667,15 @@ the Netflix challenges on October 2006.
 
 It would be the equivalent of a linear model with the movie and user as 
 independent variables and the rating as the dependent variable, which
-could be potrentially fit by the following code:
-```{r eval=FALSE}
+could be potrentially fit by the following code.
+
+
+```{r linear_analogy, eval=FALSE}
 lm(rating ~ as.factor(movieId) + as.factor(userId))
 ```
 
 
-However running the previous code would take a lot of time and resources, 
+However running the above code would take a lot of time and resources, 
 then instead an approximation is done where
 the effects per user and movie are calculated. 
 
@@ -695,8 +714,9 @@ $$
 $$
 
 
-The following constructor function creates an object for representing this model:
-```{r, eval=FALSE}
+The following constructor function creates an object to represent this model.
+
+```{r, constructor_MovieUserEffectModel, eval=eval_MovieUserEffectModel}
 #' This object-constructor function is used to generate a model
 #' of the form:
 #'   r_u,m = mu + b_m + b_u + E_u,m
@@ -750,35 +770,43 @@ MovieUserEffectModel <- function(dataset) {
 ```
 
 
-The performance for this model is displayed in the following table.
+The performance for this model is displayed in the following tables.
 It can be observed that the performance in terms of RMSE and accuracy
-was improved in comparison to the previous models.
+was improved in comparison to the previous models (based on mode and average).
 In fact, the values obtained in the RMSEs applied to the validation set
+(either fitting the whole set or in partitions) 
 are enought to reach the objective of this project.
-```{r results = 'asis', echo=FALSE, eval=FALSE}
-if (!exists('results_MovieUserEffectModel')) {
-  results_MovieUserEffectModel <-
-    get_performance_metrics(edx, validation, MovieUserEffectModel)
-}
 
-knitr::kable(results_MovieUserEffectModel,
-             caption = "Results for the model based on movie and user effects")
+
+```{r results_MovieUserEffectModel, echo=FALSE, eval=eval_MovieUserEffectModel}
+results_MovieUserEffectModel <-
+    get_performance_metrics('Movie and User Effect', edx, validation, MovieUserEffectModel)
+```
+
+```{r disp_results_MovieUserEffectModel, results = 'asis', echo=FALSE}
+knitr::kable(results_MovieUserEffectModel %>%
+               select('METHOD', 'SET_MODEL',
+                      'TRAIN_RMSE', 'TRAIN_ACC', 'VAL_RMSE', 'VAL_ACC'))
+
+knitr::kable(results_MovieUserEffectModel %>%
+               select('METHOD', 'SET_MODEL',
+                      'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
 ```
 
 
-## Model based on Naive-Bayes applied to the ratings frequency
+
+## Model based on Naive-Bayes applied to the frequency of ratings
 
 
 Models based on frequencies try to chose one of the existing ratings
-when doing the predictions, instead of calculating a numeric approximation,
-like when minimizing the difference of all the observations,
-this has the purpose of increasing the accuracy rater than minimazing the 
-global error like when using other metrics like the RMSE.
+when doing the predictions, instead of calculating a numeric approximation.
+This has the purpose of increasing the accuracy rater than minimazing the 
+global error given by metrics like the RSMSE.
 
 
-This model uses a Naive-Bayes approach applied to the frequeancy of the
+This particular model uses a Naive-Bayes approach applied to the frequeancy of the
 existing ratings per user and movie.
-The base for this model is to find the probability that an user gives a 
+The basis of this model is to find the probability that an user gives a 
 specific rating $r$, denoted $p_u(r)$;
 and similarly, the probability that a movie is rated as $r$, denoted $p_m(r)$.
 These probabilities can be estimated from the training set just by 
@@ -790,7 +818,7 @@ per user or per customer respectively.
 
 The prediction of the rating that an user gives to a movie is the value
 described by the following formula, which basically takes the rating
-which product of the probabilities for the user and movie is the maximum:
+which product of the probabilities related to the user and movie is the maximum:
 $$
 \hat{r}_{u,m} = \mathop{\mathrm{arg\,max}}_{r \in R} \Big\{ p_u(r) \cdot p_m(r) \Big\} 
 $$
@@ -802,8 +830,9 @@ where:
 * $p_m(r)$ is the probability that a movie $m$ receives a rating $r$
 
 
-The following constructor function creates an object for representing this model:
-```{r, eval=FALSE}
+The following constructor function creates an object which represents this model.
+
+```{r, constructor_RFNaiveBayesModel, eval=eval_RFNaiveBayesModel}
 #' This object-constructor function is used to generate a model
 #' to estimate the probability that an user gives a rating 'r',
 #' and the probability that a movie is given a rating 'r',
@@ -897,18 +926,28 @@ RFNaiveBayesModel <- function(dataset) {
 ```
 
 
-The performance of this model is displayed in the following table.
-It can be observed that the accuracy was increased in comparison to the previous model,
-however the RMSE presents a poorer performance which is not enought for the objective 
+The performance of this model is displayed in the following tables.
+It can be observed that the accuracy was increased in comparison to the previous models,
+however the RMSE presents a poorer performance than the one based on 
+the movie and user effets, non of the RMSEs is not enought for the objective
 of this project.
-```{r results = 'asis', echo=FALSE, eval=FALSE}
-if (!exists('results_NaiveBayesModel')) {
-  results_NaiveBayesModel <-
-    get_performance_metrics(edx, validation, RFNaiveBayesModel)
-}
-knitr::kable(results_NaiveBayesModel,
-             caption = "Results for the model based on Rating Frequency Naive-Bayes")
+
+
+```{r results_RFNaiveBayesModel, echo=FALSE, eval=eval_RFNaiveBayesModel}
+results_RFNaiveBayesModel <-
+    get_performance_metrics('RF Naive-Bayes', edx, validation, RFNaiveBayesModel)
 ```
+
+```{r disp_results_RFNaiveBayesModel, results = 'asis', echo=FALSE}
+knitr::kable(results_RFNaiveBayesModel %>%
+               select('METHOD', 'SET_MODEL',
+                      'TRAIN_RMSE', 'TRAIN_ACC', 'VAL_RMSE', 'VAL_ACC'))
+
+knitr::kable(results_RFNaiveBayesModel %>%
+               select('METHOD', 'SET_MODEL',
+                      'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
+```
+
 
 
 ## RF-Rec Model
@@ -916,9 +955,10 @@ knitr::kable(results_NaiveBayesModel,
 
 This is another model based on the frequency of the ratings aiming to improve the
 accuracy of the predictions. The model is described in this paper:
-<https://www.researchgate.net/publication/224262836_RF-Rec_Fast_and_Accurate_Computation_of_Recommendations_Based_on_Rating_Frequencies>. The idea behind this model is to model
-the tendency of user to provide extreme ratings rater than staying consistent in 
-their ratings, as modeled in the customer and user effects model.
+<https://www.researchgate.net/publication/224262836_RF-Rec_Fast_and_Accurate_Computation_of_Recommendations_Based_on_Rating_Frequencies>.
+The behind's idea is to model the tendency of users to provide extreme ratings 
+rater than staying consistent in their ratings 
+(as considered in the customer and user effects model).
 
 
 Lets define the following functions:
@@ -927,7 +967,7 @@ f_{user}(u,r) = freq_{user}(u, r) + 1 + 1_{user}(u,r)
 $$
 and:
 $$
-f_{movie}(u,r) = freq_{movie}(m, r) + 1 + 1_{movie}(m,r)
+f_{movie}(m,r) = freq_{movie}(m, r) + 1 + 1_{movie}(m,r)
 $$
 where:
 
@@ -945,12 +985,18 @@ $$
 \hat{r}_{u,m} =
 \mathop{\mathrm{arg\,max}}_{r \in R} \Big\{ f_{user}(u,r) \cdot f_{movie}(m,v) \Big\} 
 $$
+where:
+
+* $\hat{r}_{u,m}$ is the predicted rating given by the user $u$ to the movie $m$
+* $R$ is the set of all posible ratings
 
 
-The following constructor function creates an object for representing this model:
-```{r, eval=FALSE}
+The following constructor function creates an object to repesent this model.
+
+
+```{r, constructor_RFRecModel, eval=eval_RFRecModel}
 #' This object-constructor function is used to generate a model
-#' based in RF-Rec schema.
+#' based in the RF-Rec schema.
 #'
 #' @param dataset The dataset used to fit the model
 #' @return The model
@@ -1049,22 +1095,31 @@ RFRecModel <- function(dataset) {
 
 
 The performance of this model is displayed in the following table.
-It can be observed that both the RMSE and accuracy are very similar to the ones
+It can be observed that both the RMSEs and accuracies are very similar to the ones
 obtained in the Naive-Bayes approach.
-```{r results = 'asis', echo=FALSE, eval=FALSE}
-if (!exists('results_RFRecModel')) {
-  results_RFRecModel <-
-    get_performance_metrics(edx, validation, RFRecModel)
-}
-knitr::kable(results_RFRecModel,
-             caption = "Results for the model based on RF-Rec")
+
+
+```{r results_RFRecModel, echo=FALSE, eval=eval_RFRecModel}
+results_RFRecModel <-
+    get_performance_metrics('RF-Rec', edx, validation, RFRecModel)
 ```
+
+```{r disp_results_RFRecModel, results = 'asis', echo=FALSE}
+knitr::kable(results_RFRecModel %>%
+               select('METHOD', 'SET_MODEL',
+                      'TRAIN_RMSE', 'TRAIN_ACC', 'VAL_RMSE', 'VAL_ACC'))
+
+knitr::kable(results_RFRecModel %>%
+               select('METHOD', 'SET_MODEL',
+                      'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
+```
+
 
 
 ## Matrix Factorization
 
 
-Matrix factorizations methods consinst in factorizing a matrix of ratings 
+Matrix factorization methods consinst in factorizing a matrix of ratings 
 $R_{U \times M}$ (where $U$ is the number of users and $M$ the number of movies)
 as the product of two matrices of lower dimension $P_{U \times K}$ and 
 $Q_{M \times K}$ (where $K$ is a given number of factors). 

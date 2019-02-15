@@ -405,7 +405,7 @@ results_NaiveBayesModel
 
 
 #' This object-constructor function is used to generate a model
-#' based in RF-Rec schema.
+#' based in the RF-Rec schema.
 #'
 #' @param dataset The dataset used to fit the model
 #' @return The model
