@@ -1,38 +1,3 @@
-#' This object-constructor function is used to generate a model that returns 
-#' a as prediction the most common rating in the dataset used to fit it.
-#' @param dataset The dataset used to fit the model
-#' @return The model
-RModeModel <- function(dataset) {
-  model <- list()
-  
-  model$ratings <- unique(dataset$rating)
-  model$mode <- model$ratings[which.max(tabulate(match(dataset$rating, model$ratings)))]
-  
-  #' The prediction function
-  #' @param s The dataset used to perform the prediction of
-  #' @return A vector containing the prediction for the given dataset
-  model$predict <- function(s) {
-    model$mode
-  }
-  
-  model
-}
-
-
-model <- RModeModel(edx)
-
-training_pred <- model$predict(edx)
-validation_pred <- model$predict(validation)
-
-sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
-        RMSE(training_pred, edx$rating),
-        mean(training_pred == edx$rating),
-        RMSE(validation_pred, validation$rating),
-        mean(validation_pred == validation$rating))
-
-rm(model, training_pred, validation_pred)
-
-
 edx %>%
   ggplot() +
   geom_histogram(aes(x = rating), binwidth = 0.25)
@@ -76,6 +41,43 @@ edx %>%
   facet_grid(~ partition)
 
 rm(partition_names)
+
+
+
+#' This object-constructor function is used to generate a model that returns 
+#' a as prediction the most common rating in the dataset used to fit it.
+#' @param dataset The dataset used to fit the model
+#' @return The model
+RModeModel <- function(dataset) {
+  model <- list()
+  
+  model$ratings <- unique(dataset$rating)
+  model$mode <- model$ratings[which.max(tabulate(match(dataset$rating, model$ratings)))]
+  
+  #' The prediction function
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction for the given dataset
+  model$predict <- function(s) {
+    model$mode
+  }
+  
+  model
+}
+
+
+model <- RModeModel(edx)
+
+training_pred <- model$predict(edx)
+validation_pred <- model$predict(validation)
+
+sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
+        RMSE(training_pred, edx$rating),
+        mean(training_pred == edx$rating),
+        RMSE(validation_pred, validation$rating),
+        mean(validation_pred == validation$rating))
+
+rm(model, training_pred, validation_pred)
+
 
 
 #' This object-constructor function is used to generate a metamodel 
@@ -145,58 +147,74 @@ pred2stars <- function(timestamp, pred) {
 #' 1) using the whole training set to fit the model and
 #' 2) partitioning the training set before and on-or-after 
 #' the startpoint when half stars were allowed.
+#' @param  method_name The name of the method to evaluate
 #' @param training_set The dataset used to fit the models
 #' @param validation_set The dataset used as validation set
 #' @param model_generator The constructor function to generate the model
 #' @returns A dataset reporting the performance results 
-get_performance_metrics <- function(training_set, validation_set, model_generator) {
-  dataset_names <- c('Training', 'Validation')
-  datasets <- c()
-  modes <- c()
-  rmses <- c()
-  accuracies <- c()
+get_performance_metrics <- function(method_name, training_set, validation_set,
+                                    model_generator) {
+
+  result <- data.frame('METHOD' = character(), 'SET_TYPE' = character(),
+                       'TRAIN_TIME' = integer(),
+                       'PRED_TRAIN_TIME' = integer(), 'PRED_VAL_TIME' = integer(),
+                       'TRAIN_RMSE' = double(), 'TRAIN_ACC' = double(),
+                       'VAL_RMSE' = double(), 'VAL_ACC' = double(),
+                       stringsAsFactors = FALSE)
+
   counter <- 0
-  
+
   for (is_partitioned in c(FALSE, TRUE)) {
-    # Chosing the mode PARTITIONED or WHOLE
+    counter <- counter + 1
+    result[counter,] <- list(method_name, NA, NA, NA, NA, NA, NA)
+
+    train_start <- Sys.time()
+
+    # Chosing the set type: partitioned or whole
     if (is_partitioned) {
+      result[counter, 'SET_TYPE'] <- 'partitioned'
       model <- PartitionedModel(training_set, model_generator)
     } else {
+      result[counter, 'SET_TYPE'] <- 'whole'
       model <- model_generator(training_set)
     }
-    
-    for (dataset_name in dataset_names) {
+
+    train_end <- Sys.time()
+    result[counter, 'TRAIN_TIME'] <- train_end - train_start
+
+    for (is_training in c(TRUE, FALSE)) {
       # Chosing the dataset to evaluate
-      if (dataset_name == 'Training') {
+      if (is_training) {
         ds <- training_set
       } else {
         ds <- validation_set
       }
-      
-      counter <- counter + 1
-      
+
+      pred_start <- Sys.time()
+
       # Getting the prediction for the chosen dataset
       pred <- model$predict(ds)
-      
-      datasets[counter] <- dataset_name
-      modes[counter] <- ifelse(is_partitioned, 'PARTITIONED', 'WHOLE')
-      
+
+      pred_end <- Sys.time()
+
+      result[counter, ifelse(is_training, 'PRED_TRAIN_TIME', 'PRED_VAL_TIME')] <-
+        pred_end - pred_start
+
       # Calculating the RMSE
-      rmses[counter] <- RMSE(pred, ds$rating)
+      result[counter, ifelse(is_training, 'TRAIN_RMSE', 'VAL_RMSE')] <-
+        RMSE(pred, ds$rating)
       # Calculating the accuracy
-      accuracies[counter] <- mean(pred2stars(ds$timestamp, pred) == ds$rating)
+      result[counter, ifelse(is_training, 'TRAIN_ACC', 'VAL_ACC')] <-
+        mean(pred2stars(ds$timestamp, pred) == ds$rating)
     }
   }
-  
-  data.frame('Dataset' = datasets,
-             'Mode' = modes,
-             'RMSE' = rmses,
-             'Accuracy' = accuracies)
+
+  result
 }
 
 if (!exists('results_RModeModel')) {
   results_RModeModel <-
-    get_performance_metrics(edx, validation, RModeModel)
+    get_performance_metrics('Ratings Mode', edx, validation, RModeModel)
 }
 results_RModeModel
 

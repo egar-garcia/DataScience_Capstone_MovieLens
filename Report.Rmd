@@ -9,26 +9,84 @@ output:
     fig_height: 3
 ---
 
-```{r, include=FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+eval_sets_generation <- !exists('edx') | !exists('validation')
+eval_half_stars_startpoint <- !exists('eval_half_stars_startpoint')
+eval_RModeModel <- !exists('results_RModeModel')
+eval_PartitionedModel <- !exists('PartitionedModel')
+eval_pred2stars <- !exists('pred2stars')
+eval_get_performance_metrics <- !exists('get_performance_metrics')
+eval_results_RModeModel <- !exists('results_RModeModel')
 ```
 
 
 
-# Overview
+# Introduction
 
 
 The objective of the project considered in this report is to create a movie
 recommendation system using the MovieLens dataset 
-(actually for this project small subset of 10M is used).
-In the scope of this project by recomendation we understand the action of
+(actually just a small subset of 10M is used).
+For the scope of this project, by recomendation we understand the action of
 predicting the rating that a particular user gives to a particular movie. 
 
 
-As a part of this project a trininig and validation sets are given 
-(actually an R script has been given to generate them).
+As a part of this project a trininig and validation sets have been given 
+(actually an R script generates them).
 The goal is to reach an RMSE of `0.87750` or less for the system's
-predictions agains the groud thuth applied to the validation set.
+predictions agains the groud thuth, applied to the validation set.
+
+
+```{r sets_generation, eval=eval_sets_generation}
+#############################################################
+# Create edx set, validation set, and submission file
+#############################################################
+
+# Note: this process could take a couple of minutes
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+dl <- tempfile()
+download.file("http://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+ratings <- read.table(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings.dat"))),
+                      col.names = c("userId", "movieId", "rating", "timestamp"))
+
+movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
+colnames(movies) <- c("movieId", "title", "genres")
+movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(levels(movieId))[movieId],
+                                           title = as.character(title),
+                                           genres = as.character(genres))
+
+movielens <- left_join(ratings, movies, by = "movieId")
+
+# Validation set will be 10% of MovieLens data
+
+set.seed(1)
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in validation set are also in edx set
+
+validation <- temp %>% 
+  semi_join(edx, by = "movieId") %>%
+  semi_join(edx, by = "userId")
+
+# Add rows removed from validation set back into edx set
+
+removed <- anti_join(temp, validation)
+edx <- rbind(edx, removed)
+
+rm(dl, ratings, movies, test_index, temp, movielens, removed)
+```
 
 
 
@@ -51,7 +109,7 @@ edx %>%
 
 It can be observed that ratings can be interpreted as the number of starts
 from 1 to 5 that users give to a movie, however it can be seen that
-ratings ending with a half star are used, at first impression looks like
+ratings ending with a half star are also used, at first impression looks like
 half start ratings are not very popular among users.
 
 
@@ -60,19 +118,20 @@ the ratings against the timestamp, we can use `lubridate` to transform
 the timestamps to a more friendly format.
 
 
-```{r}
+```{r importlubridate}
 library(lubridate)
 ```
 
 
 For exploratory purposes lets just plot
 using a small subset of the dataset, since using the whole one might take a lot of
-time and resources:
+time and resources.
 
 
-```{r , echo=FALSE}
+```{r random_seed_1, echo=FALSE}
 set.seed(0)
 ```
+
 ```{r ratings_by_timestamp, fig.align="center"}
 edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
   ggplot(aes(x = as_datetime(timestamp), y = rating)) +
@@ -82,37 +141,44 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>
 
 
 Now something interesting can be observed, it looks like ratings ending in half-stars
-were allowed after certain point in time, and before that time just full-stars were
+were permitted after certain point in time, and before that time just full-stars were
 allowed.
 
 
-## Identifying the point in time to partition the data
+## Identifying the point in time to split the data
 
 
 To find the point in time were ratings ending in half star started to appear,
 the following code can be used.
 It basically gets the minimum timestamp in the dataset where a rating with 
-half star is found:
-```{r}
+half star is found.
+
+
+```{r finding_half_stars_startpoint, eval=eval_half_stars_startpoint}
 half_stars_startpoint <- min(filter(edx, (rating * 2) %% 2 == 1)$timestamp)
 ```
 
 
-Converting `half_stars_startpoint` to a more redable representation using
-the following code,
-it can be seen that the point in time when half-star ratings started to appear
-was on **`r as_datetime(half_stars_startpoint)`**.:
-```{r eval=FALSE}
+It can be seen that the point in time when half-star ratings started to appear
+was on **`r as_datetime(half_stars_startpoint)`**. 
+This can be done converting `half_stars_startpoint` to a more redable representation
+using the following code.
+
+
+```{r display_half_stars_startpoint, eval=FALSE}
 as_datetime(half_stars_startpoint)
 ```
 
 
 Again, let's plot the ratings against the timestamp, but this time adding a
-vertical line indicating the point in time where half-star ratings were allowed:
-```{r, echo=FALSE}
+vertical line indicating the point in time where half-star ratings were allowed.
+
+
+```{r random_seed_2, echo=FALSE}
 set.seed(0)
 ```
-```{r}
+
+```{r split_ratings_by_timestamp, fig.align="center"}
 edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>%
   ggplot(aes(x = as_datetime(timestamp), y = rating)) +
   geom_point() +
@@ -132,8 +198,10 @@ and a second one for ratings after that point in time where half-stars were allo
 
 
 Let's create another plot about the distribution of ratings in each one of these
-partitions:
-```{r}
+partitions.
+
+
+```{r partitioned_ratings_dist, fig.align="center"}
 partition_names = c(paste('before', as_datetime(half_stars_startpoint)),
                     paste('on or after', as_datetime(half_stars_startpoint)))
 
@@ -147,7 +215,7 @@ edx %>%
 ```
 
 
-```{r, echo=FALSE}
+```{r cleanning_partition_names, echo=FALSE}
 rm(partition_names)
 ```
 
@@ -166,7 +234,11 @@ same user might have changed its tendency to rate 3.5 instead, since now half-st
 were allowed.
 
 
+
 # Methodology
+
+
+## Representing ML methods/models as objects
 
 
 To evaluate the different (machine learning) methods tested in this report, an
@@ -181,8 +253,10 @@ for another dataset (which could be the one for testing, validation, production,
 
 
 For example, the following function creates and object to represent a model that always
-gives the most common rate (the mode) of the training set as prediction:
-```{r}
+gives the most common rate (the mode) of the training set as prediction.
+
+
+```{r constructor_RModeModel, eval=eval_RModeModel}
 #' This object-constructor function is used to generate a model that returns 
 #' a as prediction the most common rating in the dataset used to fit it.
 #' @param dataset The dataset used to fit the model
@@ -207,14 +281,14 @@ RModeModel <- function(dataset) {
 
 Using the constructor function, an object can be created to fit the particular model,
 p.e:
-```{r}
+```{r example_model}
 model <- RModeModel(edx)
 ```
 
 
 Then this model can be used to make predictions, p.e. the following code makes
 predictions using the training and the validation sets:
-```{r}
+```{r example_prediction}
 training_pred <- model$predict(edx)
 validation_pred <- model$predict(validation)
 ```
@@ -222,7 +296,7 @@ validation_pred <- model$predict(validation)
 
 And the predictions are helpful to messure the performance of the model in terms of
 RMSE and/or accuracy, applied to the training and validation sets, p.e:
-```{r}
+```{r example_perf_metrics}
 sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
         RMSE(training_pred, edx$rating),
         mean(training_pred == edx$rating),
@@ -231,10 +305,9 @@ sprintf("Train-RMSE: %f, Train-Acc: %f, Val-RMSE: %f, Val-Acc: %f",
 ```
 
 
-```{r, echo=FALSE}
+```{r cleanning_example, echo=FALSE}
 rm(model, training_pred, validation_pred)
 ```
-
 
 
 ## Refining the metodology to use partitioned models
@@ -247,8 +320,10 @@ partitions and then merging the prediction results for the whole set.
 The following function creates an object in charge of doing that,
 for a given method it fits a model for each one of the partitions,
 and it has a prediction function that merges the predictions 
-for the first and second models according to the timestamp:
-```{r}
+for the first and second models according to the timestamp.
+
+
+```{r constructor_PartitionedModel, eval=eval_PartitionedModel}
 #' This object-constructor function is used to generate a metamodel 
 #' that contains two models,
 #' one fitted for data before the startpoint when half stars were allowed in the
@@ -299,8 +374,10 @@ rounds the predictions to the actual number to represent stars, either full or h
 That means that according to the timestamp, before the 
 half-star starpoint only values in $\{1, 2, 3, 4, 5\}$ are allowed,
 and on or after the startpoint values in $\{1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5\}$ 
-are allowed. The folowing function performs such rounding:
-```{r}
+are allowed. The folowing function performs such rounding.
+
+
+```{r definition_pred2stars, eval=eval_pred2stars}
 #' Converts a prediction (which is a floating point number) to a one used to 
 #' represent ratings given by stars,
 #' i.e. {1, 2, 3, 4, 5} if the timestamp is before the half start startpoint 
@@ -323,61 +400,79 @@ To test a particular method if would be very helpful to have a function
 that fits the respective model to either to the whole training set or the partitions
 given by the half-star startpoint, and then meassures the prediction performance against
 the training and validation sets. The following function does exaclty that and returns
-the results in a dataset, which can be included as a table in this report:
-```{r}
+the results in a dataset, which can be included as a table in this report.
+
+
+```{r definition_get_performance_metrics, eval=eval_get_performance_metrics}
 #' This function is used to report the performance of a model in terms of
 #' RMSE and Accuracy for the training and validation sets.
 #' It evaluates the performance in two modes:
 #' 1) using the whole training set to fit the model and
 #' 2) partitioning the training set before and on-or-after 
 #' the startpoint when half stars were allowed.
+#' @param  method_name The name of the method to evaluate
 #' @param training_set The dataset used to fit the models
 #' @param validation_set The dataset used as validation set
 #' @param model_generator The constructor function to generate the model
 #' @returns A dataset reporting the performance results 
-get_performance_metrics <- function(training_set, validation_set, model_generator) {
-  dataset_names <- c('Training', 'Validation')
-  datasets <- c()
-  modes <- c()
-  rmses <- c()
-  accuracies <- c()
+get_performance_metrics <- function(method_name, training_set, validation_set,
+                                    model_generator) {
+
+  result <- data.frame('METHOD' = character(), 'SET_TYPE' = character(),
+                       'TRAIN_TIME' = integer(),
+                       'PRED_TRAIN_TIME' = integer(), 'PRED_VAL_TIME' = integer(),
+                       'TRAIN_RMSE' = double(), 'TRAIN_ACC' = double(),
+                       'VAL_RMSE' = double(), 'VAL_ACC' = double(),
+                       stringsAsFactors = FALSE)
+
   counter <- 0
-  
+
   for (is_partitioned in c(FALSE, TRUE)) {
-    # Chosing the mode PARTITIONED or WHOLE
+    counter <- counter + 1
+    result[counter,] <- list(method_name, NA, NA, NA, NA, NA, NA)
+
+    train_start <- Sys.time()
+
+    # Chosing the set type: partitioned or whole
     if (is_partitioned) {
+      result[counter, 'SET_TYPE'] <- 'partitioned'
       model <- PartitionedModel(training_set, model_generator)
     } else {
+      result[counter, 'SET_TYPE'] <- 'whole'
       model <- model_generator(training_set)
     }
-    
-    for (dataset_name in dataset_names) {
+
+    train_end <- Sys.time()
+    result[counter, 'TRAIN_TIME'] <- train_end - train_start
+
+    for (is_training in c(TRUE, FALSE)) {
       # Chosing the dataset to evaluate
-      if (dataset_name == 'Training') {
+      if (is_training) {
         ds <- training_set
       } else {
         ds <- validation_set
       }
-      
-      counter <- counter + 1
-      
+
+      pred_start <- Sys.time()
+
       # Getting the prediction for the chosen dataset
       pred <- model$predict(ds)
-      
-      datasets[counter] <- dataset_name
-      modes[counter] <- ifelse(is_partitioned, 'PARTITIONED', 'WHOLE')
-      
+
+      pred_end <- Sys.time()
+
+      result[counter, ifelse(is_training, 'PRED_TRAIN_TIME', 'PRED_VAL_TIME')] <-
+        pred_end - pred_start
+
       # Calculating the RMSE
-      rmses[counter] <- RMSE(pred, ds$rating)
+      result[counter, ifelse(is_training, 'TRAIN_RMSE', 'VAL_RMSE')] <-
+        RMSE(pred, ds$rating)
       # Calculating the accuracy
-      accuracies[counter] <- mean(pred2stars(ds$timestamp, pred) == ds$rating)
+      result[counter, ifelse(is_training, 'TRAIN_ACC', 'VAL_ACC')] <-
+        mean(pred2stars(ds$timestamp, pred) == ds$rating)
     }
   }
-  
-  data.frame('Dataset' = datasets,
-             'Mode' = modes,
-             'RMSE' = rmses,
-             'Accuracy' = accuracies)
+
+  result
 }
 ```
 
@@ -388,27 +483,48 @@ get_performance_metrics <- function(training_set, validation_set, model_generato
 To get the performance of a specific (machine learning) method,
 the following command is useful, 
 where `model_generator` is the constructor function of the respective model:
-```{r eval=FALSE}
-get_performance_metrics(model_generator)
+
+
+```{r getting_perf_metrics_example, eval=FALSE}
+get_performance_metrics(edx, validation, model_generator)
 ```
 
 
 For example, to get the performance of the previosly defined model that 
 always predict the most common rating of the training set,
-the following command calculates the prediction performance
-and includes the results as a table in this report:
+the following code retrieves the performance results and includes them
+in two tables, the first one related to the results of RMSE/accuracy, 
+and the second one related to the time it takes for training/prediction.
+
+
 ```{r eval=FALSE}
-knitr::kable(get_performance_metrics(edx, validation, RModeModel),
-             caption = "Results for the model based on the rating mode")
+results_RModeModel <-
+    get_performance_metrics('Ratings Mode', edx, validation, RModeModel)
+
+knitr::kable(results_RModeModel %>%
+               select('METHOD', 'SET_TYPE',
+                      'TRAIN_RMSE', 'TRAIN_ACC', 'VAL_RMSE', 'VAL_ACC'))
+
+knitr::kable(results_RModeModel %>%
+               select('METHOD', 'SET_TYPE',
+                      'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
 ```
-```{r results = 'asis', echo=FALSE}
-if (!exists('results_RModeModel')) {
-  results_RModeModel <-
-    get_performance_metrics(edx, validation, RModeModel)
-}
-knitr::kable(results_RModeModel,
-             caption = "Results for the model based on the rating mode")
+
+```{r results_RModeModel, echo=FALSE, eval=eval_results_RModeModel}
+results_RModeModel <-
+    get_performance_metrics('Ratings Mode', edx, validation, RModeModel)
 ```
+
+```{r disp_results_RModeModel, results = 'asis', echo=FALSE}
+knitr::kable(results_RModeModel %>%
+               select('METHOD', 'SET_TYPE',
+                      'TRAIN_RMSE', 'TRAIN_ACC', 'VAL_RMSE', 'VAL_ACC'))
+
+knitr::kable(results_RModeModel %>%
+               select('METHOD', 'SET_TYPE',
+                      'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
+```
+
 
 
 # Methods
@@ -441,7 +557,7 @@ $$
 
 
 The following constructor function creates objects that represent this model:
-```{r}
+```{r, eval=FALSE}
 #' This object-constructor function is used to generate a model
 #' that always returns as prediction the average of the rating in the
 #' given dataset used to fit the model.
@@ -469,7 +585,7 @@ The performance for this model is displayed in the following table.
 It can be observed that the performance in terms of RMSE was improved in
 comparison to the mode model, but the accuracy went worse,
 either way the performance is still bellow the one desired in this project.
-```{r results = 'asis', echo=FALSE}
+```{r results = 'asis', echo=FALSE, eval=FALSE}
 if (!exists('results_RAvgModel')) {
   results_RAvgModel <-
     get_performance_metrics(edx, validation, RAvgModel)
@@ -536,7 +652,7 @@ $$
 
 
 The following constructor function creates an object for representing this model:
-```{r}
+```{r, eval=FALSE}
 #' This object-constructor function is used to generate a model
 #' of the form:
 #'   r_u,m = mu + b_m + b_u + E_u,m
@@ -595,7 +711,7 @@ It can be observed that the performance in terms of RMSE and accuracy
 was improved in comparison to the previous models.
 In fact, the values obtained in the RMSEs applied to the validation set
 are enought to reach the objective of this project.
-```{r results = 'asis', echo=FALSE}
+```{r results = 'asis', echo=FALSE, eval=FALSE}
 if (!exists('results_MovieUserEffectModel')) {
   results_MovieUserEffectModel <-
     get_performance_metrics(edx, validation, MovieUserEffectModel)
@@ -643,7 +759,7 @@ where:
 
 
 The following constructor function creates an object for representing this model:
-```{r}
+```{r, eval=FALSE}
 #' This object-constructor function is used to generate a model
 #' to estimate the probability that an user gives a rating 'r',
 #' and the probability that a movie is given a rating 'r',
@@ -741,7 +857,7 @@ The performance of this model is displayed in the following table.
 It can be observed that the accuracy was increased in comparison to the previous model,
 however the RMSE presents a poorer performance which is not enought for the objective 
 of this project.
-```{r results = 'asis', echo=FALSE}
+```{r results = 'asis', echo=FALSE, eval=FALSE}
 if (!exists('results_NaiveBayesModel')) {
   results_NaiveBayesModel <-
     get_performance_metrics(edx, validation, RFNaiveBayesModel)
@@ -788,7 +904,7 @@ $$
 
 
 The following constructor function creates an object for representing this model:
-```{r}
+```{r, eval=FALSE}
 #' This object-constructor function is used to generate a model
 #' based in RF-Rec schema.
 #'
@@ -891,7 +1007,7 @@ RFRecModel <- function(dataset) {
 The performance of this model is displayed in the following table.
 It can be observed that both the RMSE and accuracy are very similar to the ones
 obtained in the Naive-Bayes approach.
-```{r results = 'asis', echo=FALSE}
+```{r results = 'asis', echo=FALSE, eval=FALSE}
 if (!exists('results_RFRecModel')) {
   results_RFRecModel <-
     get_performance_metrics(edx, validation, RFRecModel)
