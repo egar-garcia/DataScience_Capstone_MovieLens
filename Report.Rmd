@@ -1497,15 +1497,21 @@ and this is the one chosen to be the solution of this project.
 The script that provides the final solution (called `solution.R`)
 includes the construction of this model fitted by the whole `edx` set, and
 then performs predictions applied to the `validation` set to get a final RMSE.
+
+
 The RMSE obtained in this report was
-`r results_ResidualsMatrixFactorizationModel %>% filter(SET_MODEL == 'whole') %>% .$VAL_RMSE`,
-however the training of this model involves some randomization which might
+`r results_ResidualsMatrixFactorizationModel %>% filter(SET_MODEL == 'whole') %>% .$VAL_RMSE`.
+Just note that the training of this model involves some randomization which might
 cause the retrieved RMSE to slighly vary (from the forth decimal position or so),
-but not significat to alter the results.
+but not even significat to alter any result of this work.
 
 To conclude this report the code of the final script is included at the end.
 
 ```{R eval=FALSE}
+# PRE-CONDITION:
+#   For this script to run it is assumed that the datasets `edx` and `validation`
+#   are already created, if not please create them before.
+
 if(!require(recosystem))
   install.packages("recosystem", repos = "http://cran.us.r-project.org")
 library(recosystem)
@@ -1577,10 +1583,10 @@ ResidualsMatrixFactorizationModel <- function(dataset) {
   model$predict <- function(s) {
     # Dataset used to do the prediction, based on the movie and user
     pred_data <- data_memory(user_index = s$userId, item_index = s$movieId, index1 = T)
-
+    
     # Predicting the residuals
     pred_residuals <- model$recommender$predict(pred_data, out_memory())
-
+    
     # Prediction based in movie and user effects, plus the prediction of the residual
     s %>%
       left_join(model$movie_info, by = 'movieId') %>%
@@ -1590,7 +1596,7 @@ ResidualsMatrixFactorizationModel <- function(dataset) {
                ifelse(!is.na(user_bias), user_bias, 0)) %>%
       .$pred
   }
-
+  
   model
 }
 

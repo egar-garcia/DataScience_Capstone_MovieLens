@@ -1,3 +1,7 @@
+# PRE-CONDITION:
+#   For this script to run it is assumed that the datasets `edx` and `validation`
+#   are already created, if not please create them before.
+
 if(!require(recosystem))
   install.packages("recosystem", repos = "http://cran.us.r-project.org")
 library(recosystem)
