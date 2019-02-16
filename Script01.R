@@ -567,7 +567,7 @@ ResidualsMatrixFactorizationModel <- function(dataset) {
     # Dataset used to do the prediction, based on the movie and user
     pred_data <- data_memory(user_index = s$userId, item_index = s$movieId, index1 = T)
 
-    # Predicting the residual
+    # Predicting the residuals
     pred_residuals <- model$recommender$predict(pred_data, out_memory())
 
     # Prediction based in movie and user effects, plus the prediction of the residual
@@ -587,7 +587,7 @@ set.seed(0)
 results_ResidualsMatrixFactorizationModel <-
   get_performance_metrics('Matrix Factorization', edx, validation, ResidualsMatrixFactorizationModel)
 
-#---------------------
+
 
 # Getting the available genres
 genres <- unique(unlist(strsplit(edx$genres, '|', fixed = TRUE)))
@@ -617,8 +617,6 @@ edx_one_hot_genres <- set_one_hot_genres(edx) %>% select(-title)
 genre_user_weight_cols <- paste(genre_cols, 'user_weight', sep = '_')
 # Colums used to store the weights of the genres in an user.
 genre_movie_weight_cols <- paste(genre_cols, 'movie_weight', sep = '_')
-# Colums used to store the bias per genre of an user.
-genre_user_bias_cols <- paste(genre_cols, 'user_bias', sep = '_')
 
 # Grouping the dataset by user to get the weights per genre.
 # The weight is intended to reflect the user's proportion of rated movies
@@ -666,6 +664,8 @@ for (i in 1:length(genre_cols)) {
 rm(i, tmp_sum_movie_genre_weights)
 
 
+# Colums used to store the bias per genre of an user.
+genre_user_bias_cols <- paste(genre_cols, 'user_bias', sep = '_')
 
 LinearLikeGenreBiasBasedModel <- function(s) {
   model <- list()

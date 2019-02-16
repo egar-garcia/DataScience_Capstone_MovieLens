@@ -1,9 +1,10 @@
 ---
 title: "MovieLens Project"
 author: "Egar Garcia"
-date: "2/11/2019"
+date: "2/15/2019"
 output:
   pdf_document:
+    toc: true
     number_sections: true
     fig_width: 4
     fig_height: 3
@@ -23,7 +24,8 @@ eval_RAvgModel <- !exists('results_RAvgModel')
 eval_MovieUserEffectModel <- !exists('results_MovieUserEffectModel')
 eval_RFNaiveBayesModel <- !exists('results_RFNaiveBayesModel')
 eval_RFRecModel <- !exists('results_RFRecModel')
-eval_ResidualsMatrixFactorizationModel <- !exists('results_ResidualsMatrixFactorizationModel')
+eval_ResidualsMatrixFactorizationModel <-
+  !exists('results_ResidualsMatrixFactorizationModel')
 ```
 
 
@@ -31,17 +33,50 @@ eval_ResidualsMatrixFactorizationModel <- !exists('results_ResidualsMatrixFactor
 # Introduction
 
 
+## Objective
+
+
 The objective of the project considered in this report is to create a movie
-recommendation system using the MovieLens dataset 
-(actually just a small subset of 10M is used).
+recommendation system using the MovieLens dataset, 
+actually a small subset of MovieLens of 10M has been provided.
+
+
 For the scope of this project, by recomendation we understand the action of
-predicting the rating that a particular user gives to a particular movie. 
+predicting the rating that a particular user gives to a particular movie.
+I.e. the purpose of is not to retrieve a list of recomended movies given an user,
+instead is predicting the rating given a set of pairs movie-user.
 
 
-As a part of this project a trininig and validation sets have been given 
-(actually an R script generates them).
+## Goal
+
+
+As a part of this project the trininig and validation sets have been given,
+in the form of an R script that generates them.
 The goal is to reach an RMSE of `0.87750` or less for the system's
 predictions agains the groud thuth, applied to the validation set.
+
+
+## Key steps
+
+In this report different different methods are being developed, tested and evaluated,
+in order to get a final solution, the steps followed to do this work are the following:
+
+* Analysis of the data
+* Creation of a metodology for testing and evaluation
+* Evaluation of the deeloped methods
+* Analisys of the results for the diffent methods
+* Chosing one method as solution
+
+
+## Datasets generation
+
+
+The following is the code that has been provided
+to generate the datasets to develop and
+tests the different methods used for this project.
+It generates a set called `edx` to be used for development/training and
+a validation set called `validation` not used at all for development/training
+and just used for the performance's evaluation of the methods.
 
 
 ```{r sets_generation, eval=eval_sets_generation}
@@ -101,8 +136,9 @@ rm(dl, ratings, movies, test_index, temp, movielens, removed)
 ## A first look
 
 
-Let's take an initial look at how the ratings are distributed by plotting a
-histogram to account the amount of the different ratings given by the customers.
+Let's take an initial look at how the ratings are distributed in the given 
+training set `edx`, by plotting a histogram to account the amount of 
+the different ratings given by the customers.
 
 
 ```{r ratings_dist, fig.align="center"}
@@ -148,6 +184,7 @@ edx[createDataPartition(y = edx$rating, times = 1, p = 0.001, list = FALSE),] %>
 Now something interesting can be observed, it looks like ratings ending in half-stars
 were permitted after certain point in time, and before that time just full-stars were
 allowed.
+
 
 
 ## Identifying the point in time to split the data
@@ -508,7 +545,7 @@ training/prediction.
 
 ```{r example_results_retrieval, eval=FALSE}
 results_RModeModel <-
-    get_performance_metrics('Ratings Mode', edx, validation, RModeModel)
+    get_performance_metrics('R Mode', edx, validation, RModeModel)
 
 knitr::kable(results_RModeModel %>%
                select('METHOD', 'SET_MODEL',
@@ -521,7 +558,7 @@ knitr::kable(results_RModeModel %>%
 
 ```{r results_RModeModel, echo=FALSE, eval=eval_results_RModeModel}
 results_RModeModel <-
-    get_performance_metrics('Ratings Mode', edx, validation, RModeModel)
+    get_performance_metrics('R Mode', edx, validation, RModeModel)
 ```
 
 ```{r disp_results_RModeModel, results = 'asis', echo=FALSE}
@@ -635,15 +672,11 @@ RAvgModel <- function(dataset) {
 
 
 The performance for this model is displayed in the following tables.
-As a general observation can be seen that the performance in terms of RMSE was 
-improved in comparison to the model based on the ratings' mode,
-however the accuracy went worse,
-either way the performance is still bellow the one desired for this project.
 
 
 ```{r results_RAvgModel, echo=FALSE, eval=eval_RAvgModel}
 results_RAvgModel <-
-    get_performance_metrics('Ratings Average', edx, validation, RAvgModel)
+    get_performance_metrics('R Average', edx, validation, RAvgModel)
 ```
 
 ```{r disp_results_RAvgModel, results = 'asis', echo=FALSE}
@@ -656,6 +689,11 @@ knitr::kable(results_RAvgModel %>%
                       'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
 ```
 
+
+As a general observation can be seen that the performance in terms of RMSE has been 
+improved in comparison to the model based on the ratings' mode,
+however the accuracy went worse,
+either way the RMSE's performance is still bellow the one desired for this project.
 
 
 ## Model based on movie and user effects
@@ -773,11 +811,6 @@ MovieUserEffectModel <- function(dataset) {
 
 
 The performance for this model is displayed in the following tables.
-It can be observed that the performance in terms of RMSE and accuracy
-was improved in comparison to the previous models (based on mode and average).
-In fact, the values obtained in the RMSEs applied to the validation set
-(either fitting the whole set or in partitions) 
-are enought to reach the objective of this project.
 
 
 ```{r results_MovieUserEffectModel, echo=FALSE, eval=eval_MovieUserEffectModel}
@@ -795,6 +828,12 @@ knitr::kable(results_MovieUserEffectModel %>%
                       'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
 ```
 
+
+It can be observed that the performance in terms of RMSE and accuracy
+was improved in comparison to the previous models (based on mode and average).
+In fact, the values obtained in the RMSEs applied to the validation set
+(either fitting the whole set or in partitions) 
+are enought to reach the objective of this project.
 
 
 ## Model based on Naive-Bayes applied to the frequency of ratings
@@ -929,10 +968,6 @@ RFNaiveBayesModel <- function(dataset) {
 
 
 The performance of this model is displayed in the following tables.
-It can be observed that the accuracy was increased in comparison to the previous models,
-however the RMSE presents a poorer performance than the one based on 
-the movie and user effets, non of the RMSEs is not enought for the objective
-of this project.
 
 
 ```{r results_RFNaiveBayesModel, echo=FALSE, eval=eval_RFNaiveBayesModel}
@@ -950,6 +985,12 @@ knitr::kable(results_RFNaiveBayesModel %>%
                       'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
 ```
 
+
+It can be observed that the accuracy was increased in comparison to the
+previously tested models,
+however the RMSE presents a poorer performance than the one based on 
+the movie and user effets, non of the RMSEs is not enought for the objective
+of this project.
 
 
 ## RF-Rec Model
@@ -1097,8 +1138,6 @@ RFRecModel <- function(dataset) {
 
 
 The performance of this model is displayed in the following table.
-It can be observed that both the RMSEs and accuracies are very similar to the ones
-obtained in the Naive-Bayes approach.
 
 
 ```{r results_RFRecModel, echo=FALSE, eval=eval_RFRecModel}
@@ -1116,6 +1155,11 @@ knitr::kable(results_RFRecModel %>%
                       'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
 ```
 
+
+It can be observed that both the RMSEs and accuracies are very similar
+(although slightly worse) to the ones obtained in the Naive-Bayes approach.
+With higher accuracies that the model based on the movies and users effects,
+but the RMSEs not enough to reach the goal of this projects.
 
 
 ## Model based on matrix factorization of residuals
@@ -1211,7 +1255,7 @@ The following constructor function creates an object to repesent this model,
 in this case a number of factors $K$ of 30 is used.
 
 
-```{r constructor_ResidualsMatrixFactorizationModel, echo=FALSE, eval=eval_ResidualsMatrixFactorizationModel}
+```{r constructor_ResidualsMatrixFactorizationModel, eval=eval_ResidualsMatrixFactorizationModel}
 if(!require(recosystem))
   install.packages("recosystem", repos = "http://cran.us.r-project.org")
 library(recosystem)
@@ -1284,7 +1328,7 @@ ResidualsMatrixFactorizationModel <- function(dataset) {
     # Dataset used to do the prediction, based on the movie and user
     pred_data <- data_memory(user_index = s$userId, item_index = s$movieId, index1 = T)
 
-    # Predicting the residual
+    # Predicting the residuals
     pred_residuals <- model$recommender$predict(pred_data, out_memory())
 
     # Prediction based in movie and user effects, plus the prediction of the residual
@@ -1308,7 +1352,7 @@ The performance of this model is displayed in the following table.
 ```{r results_ResidualsMatrixFactorizationModel, echo=FALSE, eval=eval_ResidualsMatrixFactorizationModel}
 set.seed(0)
 results_ResidualsMatrixFactorizationModel <-
-    get_performance_metrics('Residuals Matrix Factorization', edx, validation, ResidualsMatrixFactorizationModel)
+    get_performance_metrics('Res Matrix Factorization', edx, validation, ResidualsMatrixFactorizationModel)
 ```
 
 ```{r disp_results_ResidualsMatrixFactorizationModel, results = 'asis', echo=FALSE}
@@ -1320,6 +1364,12 @@ knitr::kable(results_ResidualsMatrixFactorizationModel %>%
                select('METHOD', 'SET_MODEL',
                       'TRAIN_TIME', 'PRED_TRAIN_TIME', 'PRED_VAL_TIME'))
 ```
+
+
+This is the model that presents the best results for both
+the RMSE and accuarcy of all the methods tested before,
+if fitting using the whole training set.
+The obtained RMSEs are good to reach the goal for this project.
 
 
 
@@ -1336,15 +1386,67 @@ results <- rbind(results_RModeModel,
 ```
 
 
+## RMSE
+
+Let's take a look at the results of the previously tested models.
+First by analysing the result sorted by RMSE applied to the validation set,
+which is the metric considered for the success of this project.
+The RMSEs are sorted in ascending order, i.e. from the best to the worst.
+
+
 ```{r results_per_rmse, results = 'asis', echo=FALSE}
 knitr::kable(results[order(results$VAL_RMSE),] %>%
                select(METHOD, SET_MODEL, VAL_RMSE))
 ```
 
 
+The model that visible performed the best in regards to RMSE is the 
+one base on matrix factorization of the residuals applied to the whole
+training set `edx`.
+
+
+It can be observed that the 4 best results corresponds to the two methods
+that can accomplish the goal for this project,
+which is an RMSE of 0.87750 or less, these
+are the ones based on the movie and user effects 
+and matrix factorization of residuals.
+
+
+In general the partitioned models produce slightly better results in terms of 
+RMSE than their versions applied to the whole set, 
+the exception is the model based on the matrix factorizaions of residuals,
+which actually seems to fit better in the whole set than in partitions.
+
+
+## Accuracy
+
+Now let's look at the results in terms of Accuracy, the following are the
+results sorted by accuracy in descendent order, i.e. from the best to the worst.
+
 ```{r results_per_acc, results = 'asis', echo=FALSE}
 knitr::kable(results[order(-results$VAL_ACC),] %>% select(METHOD, SET_MODEL, VAL_ACC))
 ```
+
+
+Again, the model that performed the best now in regards to accuracy is the 
+one base on matrix factorization of the residuals applied to the whole
+training set `edx`, however the methods based on the frequency of ratings
+are pretty close.
+
+
+In general the methods that performed the best in regards to accuracy are the
+ones based on ratings' frequency, but the differency is small among the first 8
+on the table. Anyway, accuracy is not part of the goal of this project,
+so these results are just for informative purposes.
+
+
+## Processing time
+
+Finally lets take a look to the following two tables that show
+the time (in seconds) that takes for the models to perform the training
+(using the training set `edx`)
+and then the prediction (applied to the validation set `validation`),
+sorted in ascending order, i.e. from quickest to slowest.
 
 
 ```{r results_per_traininig_time, results = 'asis', echo=FALSE}
@@ -1357,7 +1459,52 @@ knitr::kable(results[order(results$PRED_VAL_TIME),] %>% select(METHOD, SET_MODEL
 ```
 
 
+The results vary a lot between models, but in general the methods based in
+ratings' frequency seem to perform the worst, possibly because they need
+to perform operations to extend the datasets.
+The methods based on the mode and average are pretty fast because the amount
+of opperations is minimal, however they are not considered for the purposed
+of this project.
+
+
+From these results in terms of processing time  we can observe that the methods based
+on movie/user effects and matrix factorization of residuals 
+are in acceptable times for their use as a solution.
+
+
 # Conclusion
+
+
+## General observations
+
+Six methods have been developed, tested and evaluated in this work, following
+different appraches like modeling movie/user effects, matrix factorization and 
+ratings' frequency, their results were presented and analyzed.
+
+In general the methods involving ratings' frequencies aim to increase the accuracy
+because they consider better the "impulsive" ratings by the users. 
+However for the purpose of improving the RMSE the ones modeling movies/user effects
+including the one to matrix factorize the residual worked better,
+ths could be because the predictions are not extriclty rounded to an existing 
+rating but to an amout that suits better multiple observations.
+
+
+## Selection of a solution
+
+
+The model that performed the best in this report, for both RMSE and accuracy,
+was the one based on the matrix factorization of the residuals
+fitted to the whole set,
+and this is the one chosen to be the solution of this project.
+
+
+The script that provides the final solution (called `solution.R`)
+includes the construction of this model fitted by the whole `edx` set, and
+then performs predictions applied to the `validation` set to get a final RMSE.
+The RMSE obtained in this report was
+`r results_ResidualsMatrixFactorizationModel %>% filter(SET_MODEL == 'whole') %>% .$VAL_RMSE`,
+however the training of this model involves some randomization which might
+cause the retrieved RMSE to slighly vary (from the forth decimal position).
 
 
 ```{r clean_up, include=FALSE}
@@ -1372,5 +1519,6 @@ rm(eval_sets_generation,
    eval_MovieUserEffectModel,
    eval_RFNaiveBayesModel,
    eval_RFRecModel,
-   eval_MatrixFactorizationModel)
+   eval_MatrixFactorizationModel,
+   eval_ResidualsMatrixFactorizationModel)
 ```
