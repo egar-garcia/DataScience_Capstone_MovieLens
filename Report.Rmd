@@ -59,14 +59,20 @@ predictions agains the groud thuth, applied to the validation set.
 
 ## Key steps
 
-In this report different methods are being developed, tested and evaluated,
-in order to get a final solution, the steps followed to do this work are the following:
+
+In this report different methods are being developed, tested and evaluated.
+In order to get a final solution, the steps followed to do this work are the following:
 
 * Analysis of the data
 * Creation of a metodology for testing and evaluation
 * Evaluation of the deeloped methods
 * Analisys of the results for the diffent methods
 * Chosing one method as solution
+
+
+This document, the code and other artifacts created in this project can be found
+in the GitHub repository:
+<https://github.com/egar-garcia/DataScience_Capstone_MovieLens>.
 
 
 ## Datasets generation
@@ -1372,7 +1378,7 @@ The obtained RMSEs are good to reach the goal for this project.
 # Results
 
 
-```{r echo=FALSE}
+```{r results_grouping, echo=FALSE}
 results <- rbind(results_RModeModel,
                  results_RAvgModel,
                  results_MovieUserEffectModel,
@@ -1396,8 +1402,8 @@ knitr::kable(results[order(results$VAL_RMSE),] %>%
 ```
 
 
-The model that visible performed the best in regards to RMSE is the 
-one base on matrix factorization of the residuals applied to the whole
+The model that visible performed the best in regards to RMSE, is the 
+one based on matrix factorization of the residuals, applied to the whole
 training set `edx`.
 
 
@@ -1431,7 +1437,7 @@ are pretty close.
 
 
 In general the methods that performed the best in regards to accuracy are the
-ones based on ratings' frequency, but the differency is small among the first 8
+ones based on ratings' frequency, but the differency is small among the first eight
 on the table. Anyway, accuracy is not part of the goal of this project,
 so these results are just for informative purposes.
 
@@ -1463,7 +1469,7 @@ of opperations is minimal, however they are not considered for the purposed
 of this project.
 
 
-From these results in terms of processing time  we can observe that the methods based
+From these results, in terms of processing time we can observe that the methods based
 on movie/user effects and matrix factorization of residuals 
 are in acceptable times for their use as a solution.
 
@@ -1473,19 +1479,22 @@ are in acceptable times for their use as a solution.
 
 ## General observations
 
-Six methods have been developed, tested and evaluated in this work, following
+Six methods have been developed, tested and evaluated in this work following
 different appraches like modeling movie/user effects, matrix factorization and 
 ratings' frequency, their results were presented and analyzed.
 
-In general the methods involving ratings' frequencies aim to increase the accuracy
-because they consider better the "impulsive" ratings by the users. 
-However for the purpose of improving the RMSE the ones modeling movies/user effects
-including the one to matrix factorize the residual worked better,
+In general the methods involving ratings' frequencies aim to increase the accuracy,
+as it can be seen in the results,
+because they take in consideration the "extreme" ratings by the users.
+
+
+However, for the purpose of improving the RMSE the ones modeling movies/user effects
+including the one to matrix-factorize the residual worked better,
 ths could be because the predictions are not extriclty rounded to an existing 
 rating but to an amout that suits better multiple observations.
 
 
-## Selection of a solution
+## The final solution
 
 
 The model that performed the best in this report, for both RMSE and accuracy,
@@ -1494,7 +1503,7 @@ fitted to the whole set,
 and this is the one chosen to be the solution of this project.
 
 
-The script that provides the final solution (called `solution.R`)
+The script that provides the final solution
 includes the construction of this model fitted by the whole `edx` set, and
 then performs predictions applied to the `validation` set to get a final RMSE.
 
@@ -1505,9 +1514,11 @@ Just note that the training of this model involves some randomization which migh
 cause the retrieved RMSE to slighly vary (from the forth decimal position or so),
 but not even significat to alter any result of this work.
 
-To conclude this report the code of the final script is included at the end.
 
-```{R eval=FALSE}
+To conclude this report the code of the final script and the result of its run
+which includes the resulting RMSE are included at the end.
+
+```{R final_solution, eval=TRUE}
 # PRE-CONDITION:
 #   For this script to run it is assumed that the datasets `edx` and `validation`
 #   are already created, if not please create them before.
