@@ -41,10 +41,11 @@ recommendation system using the MovieLens dataset,
 actually a small subset of MovieLens of 10M has been provided.
 
 
-For the scope of this project, by recomendation we understand the action of
+For the scope of this project, we are focus in
 predicting the rating that a particular user gives to a particular movie.
-I.e. the purpose of is not to retrieve a list of recomended movies given an user,
-instead is predicting the rating given a set of pairs movie-user.
+The purpose is not to retrieve a list of recomended movies to an user,
+as like in other recomendation systems,
+instead is predicting the rating when the user and movie are given.
 
 
 ## Goal
@@ -58,7 +59,7 @@ predictions agains the groud thuth, applied to the validation set.
 
 ## Key steps
 
-In this report different different methods are being developed, tested and evaluated,
+In this report different methods are being developed, tested and evaluated,
 in order to get a final solution, the steps followed to do this work are the following:
 
 * Analysis of the data
@@ -76,7 +77,7 @@ to generate the datasets to develop and
 tests the different methods used for this project.
 It generates a set called `edx` to be used for development/training and
 a validation set called `validation` not used at all for development/training
-and just used for the performance's evaluation of the methods.
+and just used for doing the performance's evaluation of the methods.
 
 
 ```{r sets_generation, eval=eval_sets_generation}
@@ -149,7 +150,7 @@ edx %>%
 
 
 It can be observed that ratings can be interpreted as the number of starts
-from 1 to 5 that users give to a movie, however it can be seen that
+from 1 to 5 that users give to a movie, it can be seen that
 ratings ending with a half star are also used, at first impression looks like
 half start ratings are not very popular among users.
 
@@ -289,13 +290,13 @@ by a model which would be generated through the construction of an object.
 
 
 To generate a model, the constructor function receives a dataset (the training set) 
-which is used to fit the model an construct its object.
+which is used to fit the model and construct its object.
 The model's object includes a `predict` function used to perform a prediction
 for another dataset (which could be the one for testing, validation, production, etc.).
 
 
 For example, the following function creates and object to represent a model that always
-gives the most common rate (the mode) of the training set as prediction.
+gives the most common rating (the mode) of the training set as prediction.
 
 
 ```{r constructor_RModeModel, eval=eval_RModeModel}
@@ -438,7 +439,7 @@ pred2stars <- function(timestamp, pred) {
 ```
 
 
-To test a particular method if would be very helpful to have a function
+To test and evaluate a particular method if would be very helpful to have a function
 that fits the respective model to either to the whole training set or the partitions
 given by the half-star startpoint, and then meassures the prediction performance against
 the training and validation sets. The following function does exaclty that and returns
@@ -526,20 +527,14 @@ get_performance_metrics <- function(method_name, training_set, validation_set,
 
 
 To get the performance of a specific (machine learning) method,
-the following command is useful, 
-where `model_generator` is the constructor function of the respective model:
-
-
-```{r getting_perf_metrics_example, eval=FALSE}
-get_performance_metrics(edx, validation, model_generator)
-```
+the function `get_performance_metrics` would do all the hard work.
 
 
 For example, to get the performance of the previosly defined model that 
 always predict the most common rating of the training set,
 the following code can be used to retrieve the performance results and 
 then to includes them in two tables, the first one related to the results of
-the RMSE/accuracy,  and the second one related to the time it takes for
+the RMSE/accuracy, and the second one related to the time it takes for
 training/prediction.
 
 
@@ -572,7 +567,7 @@ knitr::kable(results_RModeModel %>%
 ```
 
 
-The previously described mechanism is how the differemt methods are going to be tested
+The previously described mechanism is how the diferent methods are going to be tested
 in this report, i.e. an object-model is generated then the performance's results are
 calculated and displayed.
 
@@ -690,7 +685,7 @@ knitr::kable(results_RAvgModel %>%
 ```
 
 
-As a general observation can be seen that the performance in terms of RMSE has been 
+As a general observation, it can be seen that the performance in terms of RMSE has been 
 improved in comparison to the model based on the ratings' mode,
 however the accuracy went worse,
 either way the RMSE's performance is still bellow the one desired for this project.
@@ -742,8 +737,8 @@ bad movies have a negative effect (bias).
 
 The user effect $b_{u}$ of an user $u$ is the average of $r_{u,m} - \mu - b_{m}$
 for all the movies $m$ that the user rated.
-It would be expected that optimistic users (that can rate well a really bad movie)
-have a positive effect (bias), while cranky users (that can reate bad a great movei)
+It would be expected that optimistic users (that rate well a really bad movie)
+have a positive effect (bias), while cranky users (that rate bad a great movie)
 have a negative effect (bias).
 
 
@@ -842,7 +837,7 @@ are enought to reach the objective of this project.
 Models based on frequencies try to chose one of the existing ratings
 when doing the predictions, instead of calculating a numeric approximation.
 This has the purpose of increasing the accuracy rater than minimazing the 
-global error given by metrics like the RSMSE.
+global error given by metrics like the RMSE.
 
 
 This particular model uses a Naive-Bayes approach applied to the frequeancy of the
@@ -989,7 +984,7 @@ knitr::kable(results_RFNaiveBayesModel %>%
 It can be observed that the accuracy was increased in comparison to the
 previously tested models,
 however the RMSE presents a poorer performance than the one based on 
-the movie and user effets, non of the RMSEs is not enought for the objective
+the movie and user effets, none of the RMSEs is enought for the objective
 of this project.
 
 
@@ -1000,11 +995,11 @@ This is another model based on the frequency of the ratings aiming to improve th
 accuracy of the predictions. The model is described in this paper:
 <https://www.researchgate.net/publication/224262836_RF-Rec_Fast_and_Accurate_Computation_of_Recommendations_Based_on_Rating_Frequencies>.
 The behind's idea is to model the tendency of users to provide extreme ratings 
-rater than staying consistent in their ratings 
+rater than staying consistent in an average
 (as considered in the customer and user effects model).
 
 
-Lets define the following functions:
+Let's define the following functions:
 $$
 f_{user}(u,r) = freq_{user}(u, r) + 1 + 1_{user}(u,r)
 $$
@@ -1137,7 +1132,7 @@ RFRecModel <- function(dataset) {
 ```
 
 
-The performance of this model is displayed in the following table.
+The performance of this model is displayed in the following tables.
 
 
 ```{r results_RFRecModel, echo=FALSE, eval=eval_RFRecModel}
@@ -1158,17 +1153,17 @@ knitr::kable(results_RFRecModel %>%
 
 It can be observed that both the RMSEs and accuracies are very similar
 (although slightly worse) to the ones obtained in the Naive-Bayes approach.
-With higher accuracies that the model based on the movies and users effects,
-but the RMSEs not enough to reach the goal of this projects.
+It reaches higher accuracies that the model based on the movies and users effects,
+but the RMSEs not enough to reach the goal of this project.
 
 
 ## Model based on matrix factorization of residuals
 
 
 Matrix factorization methods consinst in factorizing a matrix of ratings 
-$R_{U \times M}$ -- being $U$ the number of users and $M$ the number of movies --
+$R_{U \times M}$, where $U$ is the number of users and $M$ the number of movies,
 as the product of two matrices of lower dimension $P_{U \times K}$ and 
-$Q_{M \times K}$ -- being $K$ a given number of factors --. 
+$Q_{M \times K}$, where $K$ is a given number of factors. 
 
 $$
 R = P Q^t
@@ -1184,24 +1179,25 @@ per user, and $Q$ similarly indicates the amount of each one of the factors
 per movie. 
 
 
-Following this idea, the prediction of the rating that a customer $u$ gives to a movie $m$
-can be expressed as:
+Following this idea, the prediction of the rating that a customer 
+$u$ gives to a movie $m$ can be expressed as:
 $$
 \hat{r}_{u,m} = \sum_{k=1}^K (P)_{u,k} \cdot (Q)_{m,k}
 $$
 
 
-In practice the training observations are used to construct $R$, but in genaral
-they can not be completly fill the matrix $R$, so missing values can be filled
+In practice, the training observations are used to construct $R$, but in genaral
+they can not be completly fill the matrix, so missing values can be filled
 with an average value.
 Some methods like gradient descend can be used to create an approximation of
-the factorization, fortunatelly the package `recosystem` can create an
-approximation for us:
-<https://cran.r-project.org/web/packages/recosystem/vignettes/introduction.html>.
+the factorization, fortunatelly the package `recosystem`
+(<https://cran.r-project.org/web/packages/recosystem/vignettes/introduction.html>)
+can approximate the factorization for us.
 
 
-For this project a matrix factorization is applied to the residuals of the model based
-on the movie and user effect. The residuals would be defined by the following equation,
+For this particular model a matrix factorization is applied to the residuals of 
+the model based on the movie and user effect.
+The residuals would be defined by the following equation,
 they are assumed to be averaged at zero:
 $$
 \varepsilon_{u,m} = r_{u,m} - \mu - b_{m} - b_{u}
@@ -1252,7 +1248,7 @@ where:
 
 
 The following constructor function creates an object to repesent this model,
-in this case a number of factors $K$ of 30 is used.
+in this case a number of factors $K = 30$ is used.
 
 
 ```{r constructor_ResidualsMatrixFactorizationModel, eval=eval_ResidualsMatrixFactorizationModel}
@@ -1405,7 +1401,7 @@ one base on matrix factorization of the residuals applied to the whole
 training set `edx`.
 
 
-It can be observed that the 4 best results corresponds to the two methods
+It can be observed that the four best results corresponds to the two methods
 that can accomplish the goal for this project,
 which is an RMSE of 0.87750 or less, these
 are the ones based on the movie and user effects 
@@ -1504,7 +1500,113 @@ then performs predictions applied to the `validation` set to get a final RMSE.
 The RMSE obtained in this report was
 `r results_ResidualsMatrixFactorizationModel %>% filter(SET_MODEL == 'whole') %>% .$VAL_RMSE`,
 however the training of this model involves some randomization which might
-cause the retrieved RMSE to slighly vary (from the forth decimal position).
+cause the retrieved RMSE to slighly vary (from the forth decimal position or so),
+but not significat to alter the results.
+
+To conclude this report the code of the final script is included at the end.
+
+```{R eval=FALSE}
+if(!require(recosystem))
+  install.packages("recosystem", repos = "http://cran.us.r-project.org")
+library(recosystem)
+
+#' This object-constructor function is used to generate a model
+#' of the form:
+#'   r_u,m ~ mu + b_m + b_u + sum {k = 1..K} (p_u,k * q_m_k)
+#' where:
+#'  - 'r_u,m' is the rating given by an user 'u' to a movie 'm'
+#'  - 'mu' is the average of all the observed ratings
+#'  - 'b_m' is the movie effect (movie bias) of a movie 'm'
+#'  - 'b_u' is the user effect (user bias) of an user 'u'
+#'  - 'p_u,k' is the amount of the factor 'k' that the user 'u' has
+#'  - 'q_m,k' is the amount of the factor 'k' that the movie 'm' has
+#'  - 'K' is the number of (latent) factors
+#'
+#' @param dataset The dataset used to fit the model
+#' @return The model
+ResidualsMatrixFactorizationModel <- function(dataset) {
+  model <- list()
+
+  # The average of all the ratings in the dataset
+  model$mu <- mean(dataset$rating)
+
+  # Getting the movie bias for each movie
+  model$movie_info <- dataset %>%
+    group_by(movieId) %>%
+    summarise(movie_bias = mean(rating - model$mu))
+
+  # Getting the user bias for each user
+  model$user_info <- dataset %>%
+    left_join(model$movie_info, by = 'movieId') %>%
+    group_by(userId) %>%
+    summarise(user_bias = mean(rating - movie_bias - model$mu))
+
+  # Gettint the training set containing the residuals
+  training_set <- dataset %>%
+    left_join(model$movie_info, by = 'movieId') %>%
+    left_join(model$user_info, by = 'userId') %>%
+    mutate(residual = rating - (model$mu + movie_bias + user_bias))
+
+  # Training set to perform the matroix factorization of the residuals
+  train_data <- data_memory(user_index = training_set$userId,
+                            item_index = training_set$movieId, 
+                            rating = training_set$residual,
+                            index1 = T)
+  # Training a recomender, this is the one that does the matrix factorization
+  # in this case for 30 factors
+  model$recommender <- Reco()
+  model$recommender$train(train_data,
+                          opts = c(dim = 30, costp_l2 = 0.1, costq_l2 = 0.1, 
+                                   lrate = 0.1, niter = 100, nthread = 6,
+                                   verbose = F))
+
+  #' The prediction function, it retrieves as prediction:
+  #'   mu + b_m + b_u + sum {k = 1..K} (p_u,k * q_m_k)
+  #' where:
+  #'  - 'mu' is the average of all the observed ratings during training
+  #'  - 'b_m' is the movie effect (movie bias) observed during training for a movie 'm'
+  #'  -  b_u' is the user effect (user bias) observed during training for an user 'u'
+  #'  - 'p_u,k' is the quantity of the factor 'k' that the user 'u' has,
+  #'            calculated by matrix factorization
+  #'  - 'q_m,k' is the quantity of the factor 'k' that the movie 'm' has,
+  #'            calculated by matrix factorization
+  #'  - 'K' is the number of (latent) factors, in this case 30
+  #'
+  #' @param s The dataset used to perform the prediction of
+  #' @return A vector containing the prediction
+  model$predict <- function(s) {
+    # Dataset used to do the prediction, based on the movie and user
+    pred_data <- data_memory(user_index = s$userId, item_index = s$movieId, index1 = T)
+
+    # Predicting the residuals
+    pred_residuals <- model$recommender$predict(pred_data, out_memory())
+
+    # Prediction based in movie and user effects, plus the prediction of the residual
+    s %>%
+      left_join(model$movie_info, by = 'movieId') %>%
+      left_join(model$user_info, by = 'userId') %>%
+      mutate(pred = pred_residuals + model$mu +
+               ifelse(!is.na(movie_bias), movie_bias, 0) +
+               ifelse(!is.na(user_bias), user_bias, 0)) %>%
+      .$pred
+  }
+
+  model
+}
+
+set.seed(0)
+# Fitting the model with the 'edx' set
+model <- ResidualsMatrixFactorizationModel(edx)
+
+# Performing a prediction agains the 'validation' set
+validation_pred <- model$predict(validation)
+
+# Calculating the RMSE agains the ground truth of the 'validation' set
+rmse <- RMSE(validation_pred, validation$rating)
+
+# Displaying the RMSE
+rmse
+```
 
 
 ```{r clean_up, include=FALSE}
